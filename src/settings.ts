@@ -1,14 +1,16 @@
 import { type App, Modal, Notice, normalizePath, PluginSettingTab, Setting } from 'obsidian'
 import { t } from './i18n'
-import { type PlaceSettings, parseMarker } from './ladder'
+import { parseMarker } from './ladder'
 import type TidePlugin from './main'
+import type { PeriodSettings } from './periods'
 
-export type TideSettings = PlaceSettings
+export type TideSettings = PeriodSettings
 
 export const DEFAULT_SETTINGS: TideSettings = {
   periodsFolder: '',
   inbox: 'inbox.md',
   listMarker: 'categories: [[lists]]',
+  templatesFolder: 'templates',
 }
 
 export class TideSettingTab extends PluginSettingTab {
@@ -21,7 +23,7 @@ export class TideSettingTab extends PluginSettingTab {
 
   display() {
     this.containerEl.empty()
-    for (const key of ['periodsFolder', 'inbox', 'listMarker'] as const) {
+    for (const key of ['periodsFolder', 'inbox', 'listMarker', 'templatesFolder'] as const) {
       new Setting(this.containerEl)
         .setName(t(`settings.${key}`))
         .setDesc(t(`settings.${key}.desc`))

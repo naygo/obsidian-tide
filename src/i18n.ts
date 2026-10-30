@@ -7,6 +7,9 @@ const ptBR = {
   'command.newList': 'Nova lista',
   // marks a task shown on its DEADLINE day in a tide-tasks block
   'block.deadline': 'prazo',
+  'command.openWeek': 'Abrir esta semana',
+  'command.openMonth': 'Abrir este mês',
+  'command.openYear': 'Abrir este ano',
   'newList.name': 'Nome',
   'newList.create': 'Criar',
   'newList.exists': 'Já existe uma nota com esse nome.',
@@ -17,6 +20,9 @@ const ptBR = {
   'settings.inbox.desc': 'Caminho da nota da Inbox, que fica no topo da escada como as listas.',
   'settings.listMarker': 'Marcador de lista',
   'settings.listMarker.desc': 'Propriedade e valor (como categories: [[lists]]) ou o nome de uma pasta.',
+  'settings.templatesFolder': 'Pasta de templates',
+  'settings.templatesFolder.desc':
+    'Onde ficam Semana.md, Mês.md e Ano.md. O template do daily vem das configurações do Daily notes.',
   // written into the :LOGBOOK: entry of a repeating task, before the occurrence date
   'logbook.occurrence': 'ocorrência de',
   // weekday abbreviations written inside org dates, Sunday first
