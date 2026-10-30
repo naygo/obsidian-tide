@@ -25,6 +25,11 @@
   color: var(--text-muted);
 }
 
+.tide-deadline {
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+}
+
 .tide-date,
 .tide-source {
   color: var(--text-faint);

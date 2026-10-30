@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { type Place, type PlaceSettings, chain, placeOf, showsAt, tasksIn } from './ladder'
+import { type Place, type PlaceSettings, chain, placeOf, showsAt, taskDates, tasksIn } from './ladder'
+import { parseBlock } from './org'
 
 const SETTINGS: PlaceSettings = { periodsFolder: '', inbox: 'inbox.md', listMarker: 'categories: [[lists]]' }
 const LIST: Place = { kind: 'list', key: 'tide.md' }
@@ -113,5 +114,24 @@ describe('tasksIn', () => {
     ])
     expect(tasks[0].block.scheduled?.date).toBe('2026-10-30')
     expect(tasks[0].block.steps).toHaveLength(1)
+  })
+})
+
+describe('taskDates', () => {
+  const dates = (...lines: string[]) => taskDates(parseBlock(['- TODO x', ...lines])!)
+
+  it('puts a task on its SCHEDULED day and on its DEADLINE day, as the org agenda does', () => {
+    expect(dates('  SCHEDULED: <2026-10-30 sex>', '  DEADLINE: <2026-11-04 qua>')).toEqual([
+      { date: '2026-10-30', kind: 'scheduled' },
+      { date: '2026-11-04', kind: 'deadline' },
+    ])
+    expect(dates('  DEADLINE: <2026-11-04 qua>')).toEqual([{ date: '2026-11-04', kind: 'deadline' }])
+    expect(dates()).toEqual([])
+  })
+
+  it('shows the task once when both fall on the same day', () => {
+    expect(dates('  SCHEDULED: <2026-10-30 sex 14:00>', '  DEADLINE: <2026-10-30 sex>')).toEqual([
+      { date: '2026-10-30', kind: 'deadline' },
+    ])
   })
 })

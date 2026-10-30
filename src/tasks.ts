@@ -1,17 +1,17 @@
 import { type App, Events, MarkdownRenderChild, TFile } from 'obsidian'
 import { type Change, orgAction } from './actions'
 import { t } from './i18n'
-import { type Place, type PlaceSettings, placeOf, showsAt, tasksIn } from './ladder'
+import { type Place, type PlaceSettings, type TaskDate, placeOf, showsAt, taskDates, tasksIn } from './ladder'
 import type { OrgBlock } from './org'
 
-export interface IndexedTask {
+/** One task on one of its days: a task with SCHEDULED and DEADLINE on different days is indexed twice. */
+export interface IndexedTask extends TaskDate {
   path: string
   line: number
   /** the head line as indexed, to find the task again before writing */
   head: string
   block: OrgBlock
   home: Place
-  date: string
 }
 
 /** Every dated task of the vault that can show below where it lives. Fires 'changed' after each update. */
@@ -59,8 +59,7 @@ export class TaskIndex extends Events {
     if (!home || home.kind === 'day') return
     const lines = data.split('\n')
     const tasks = tasksIn(lines).flatMap(({ line, block }) => {
-      const date = block.scheduled?.date ?? block.deadline?.date
-      return date ? [{ path: file.path, line, head: lines[line], block, home, date }] : []
+      return taskDates(block).map((d) => ({ ...d, path: file.path, line, head: lines[line], block, home }))
     })
     if (tasks.length) this.files.set(file.path, tasks)
   }
@@ -104,6 +103,7 @@ export class TasksBlock extends MarkdownRenderChild {
         e.preventDefault()
         void openAt(this.app, task)
       })
+      if (task.kind === 'deadline') li.createSpan({ cls: 'tide-deadline', text: t('block.deadline') })
       if (here!.kind !== 'day') li.createSpan({ cls: 'tide-date', text: task.date })
       li.createSpan({ cls: 'tide-source', text: task.path.replace(/\.md$/, '') })
     }

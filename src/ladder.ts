@@ -69,6 +69,19 @@ export function showsAt(home: Place, date: string, here: Place): boolean {
   return here.kind !== 'list' && at >= 0 && (home.kind === 'list' || c.indexOf(home.key) > at)
 }
 
+export interface TaskDate {
+  date: string
+  kind: 'scheduled' | 'deadline'
+}
+
+/** Like the org agenda: a task falls on its SCHEDULED day and on its DEADLINE day, once if they match. */
+export function taskDates(b: OrgBlock): TaskDate[] {
+  const out: TaskDate[] = []
+  if (b.scheduled && b.scheduled.date !== b.deadline?.date) out.push({ date: b.scheduled.date, kind: 'scheduled' })
+  if (b.deadline) out.push({ date: b.deadline.date, kind: 'deadline' })
+  return out
+}
+
 export interface FoundTask {
   /** line of the task head in the file */
   line: number
