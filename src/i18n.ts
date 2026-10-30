@@ -4,6 +4,8 @@ const ptBR = {
   'command.prevState': 'Voltar estado da tarefa',
   'command.priorityUp': 'Aumentar prioridade da tarefa',
   'command.priorityDown': 'Diminuir prioridade da tarefa',
+  // written into the :LOGBOOK: entry of a repeating task, before the occurrence date
+  'logbook.occurrence': 'ocorrência de',
   // weekday abbreviations written inside org dates, Sunday first
   'weekday.0': 'dom',
   'weekday.1': 'seg',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseBlock, serializeBlock } from './org'
+import { parseBlock, serializeBlock, shiftDate } from './org'
 
 const SPEC_EXAMPLE = [
   '- TODO [#A] dentista :saude:casa:',
@@ -90,5 +90,25 @@ describe('weekday inside < >', () => {
   it('is written from the date in the UI language', () => {
     const lines = ['- TODO x', '  DEADLINE: <2026-10-31 Sat>']
     expect(serializeBlock(parseBlock(lines)!)).toEqual(['- TODO x', '  DEADLINE: <2026-10-31 sáb>'])
+  })
+})
+
+describe('shiftDate', () => {
+  it.each([
+    ['2026-10-30', '+1d', '2026-10-31'],
+    ['2026-12-31', '+1d', '2027-01-01'],
+    ['2028-02-28', '+1d', '2028-02-29'],
+    ['2026-10-30', '+1w', '2026-11-06'],
+    ['2026-12-28', '+2w', '2027-01-11'],
+    ['2026-10-30', '+1m', '2026-11-30'],
+    ['2026-01-31', '+1m', '2026-02-28'],
+    ['2028-01-31', '+1m', '2028-02-29'],
+    ['2026-12-15', '+1m', '2027-01-15'],
+    ['2026-10-31', '+3m', '2027-01-31'],
+    ['2026-10-30', '+1y', '2027-10-30'],
+    ['2028-02-29', '+1y', '2029-02-28'],
+    ['2028-02-29', '+4y', '2032-02-29'],
+  ])('%s %s → %s', (date, repeater, next) => {
+    expect(shiftDate(date, repeater)).toBe(next)
   })
 })

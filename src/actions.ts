@@ -1,12 +1,15 @@
+import { t } from './i18n'
 import {
   type OrgBlock,
   STATES,
   type State,
   type Timestamp,
+  formatTimestamp,
   parseBlock,
   parseHead,
   serializeClosed,
   serializeHead,
+  shiftDate,
 } from './org'
 
 export type Action = 'nextState' | 'prevState' | 'priorityUp' | 'priorityDown'
@@ -32,8 +35,19 @@ export function orgAction(lines: string[], cursorLine: number, action: Action, n
   const block = parseBlock(old)!
   const next = transition(block, action, now)
   if (!next) return null
-  // touch only the head and the CLOSED line; the rest stays exactly as written
+  // touch only the head, the CLOSED line and, on a repeat, SCHEDULED and the logbook; the rest stays as written
   const out = [serializeHead(next), ...old.slice(1)]
+  // a repeat: log the occurrence and move SCHEDULED; bottom-up, so the CLOSED splice below keeps its index
+  if (next.scheduled !== block.scheduled) {
+    const entry = `- State "DONE" from "${block.state}" [${stamp(now).date}] (${t('logbook.occurrence')} ${block.scheduled!.date})`
+    const drawersEnd = old.length - block.body.length
+    const open = old.findIndex((l, i) => i < drawersEnd && l.trim() === ':LOGBOOK:')
+    if (block.logbook) out.splice(open + block.logbook.length + 1, 0, leadOf(old[open]) + entry)
+    else
+      out.splice(drawersEnd, 0, `${block.childIndent}:LOGBOOK:`, block.childIndent + entry, `${block.childIndent}:END:`)
+    const at = block.planning.indexOf('SCHEDULED') + 1
+    out[at] = `${leadOf(old[at])}SCHEDULED: ${formatTimestamp(next.scheduled!, true)}`
+  }
   const closedAt = block.planning.indexOf('CLOSED') + 1
   if (next.closed && !closedAt) out.splice(block.planning.length + 1, 0, serializeClosed(next))
   if (!next.closed && closedAt) out.splice(closedAt, 1)
@@ -50,6 +64,16 @@ function transition(b: OrgBlock, action: Action, now: Date): OrgBlock | null {
   if (!b.state && action === 'prevState') return null
   const i = RING.indexOf(b.state)
   const state = RING[(i + (action === 'nextState' ? 1 : RING.length - 1)) % RING.length]
+  // completing a repeating task sends it back to TODO on its next date, without CLOSED;
+  // stepping back from CANCELED is not a completion, so it lands on DONE like any task
+  if (state === 'DONE' && action === 'nextState' && b.scheduled?.repeater) {
+    return {
+      ...b,
+      state: 'TODO',
+      closed: null,
+      scheduled: { ...b.scheduled, date: shiftDate(b.scheduled.date, b.scheduled.repeater) },
+    }
+  }
   const closing = CLOSED_STATES.includes(state)
   const closed = !closing ? null : CLOSED_STATES.includes(b.state) && b.closed ? b.closed : stamp(now)
   return { ...b, state, closed }
@@ -64,7 +88,8 @@ function stamp(d: Date): Timestamp {
   }
 }
 
-const indentOf = (l: string) => l.match(/^\s*/)![0].length
+const leadOf = (l: string) => l.match(/^\s*/)![0]
+const indentOf = (l: string) => leadOf(l).length
 
 /**
  * The task block around the cursor: the nearest enclosing list item with a keyword,
@@ -118,7 +143,10 @@ export function diffLines(a: string[], b: string[]): Change[] {
       if (j < b.length && (i === a.length || lcs[i][j + 1] >= lcs[i + 1][j])) j++
       else i++
     }
-    changes.push(hunk(a.slice(i0, i), b.slice(j0, j), starts[i0], i === a.length, total))
+    // line for line when the counts match, so each changed line is trimmed on its own
+    if (i - i0 === j - j0)
+      for (let k = 0; k < i - i0; k++) changes.push(hunk([a[i0 + k]], [b[j0 + k]], starts[i0 + k], false, total))
+    else changes.push(hunk(a.slice(i0, i), b.slice(j0, j), starts[i0], i === a.length, total))
   }
   return changes
 }

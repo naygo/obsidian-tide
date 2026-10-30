@@ -149,3 +149,21 @@ export function serializeBlock(b: OrgBlock): string[] {
   if (b.logbook) out.push(`${c}:LOGBOOK:`, ...b.logbook, `${c}:END:`)
   return out.concat(b.body)
 }
+
+/**
+ * The date one repeater step (`+1d`, `+2w`, `+1m`, `+1y`) after `date`.
+ * Months and years past the end of the target month land on its last day.
+ * ponytail: only the shifted date is stored, so a task on the 31st drifts to the 28th for good after February;
+ * keep the original day somewhere if that matters.
+ */
+export function shiftDate(date: string, repeater: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const n = Number(repeater.slice(1, -1))
+  const unit = repeater.slice(-1)
+  if (unit === 'd' || unit === 'w') return isoDate(new Date(Date.UTC(y, m - 1, d + n * (unit === 'w' ? 7 : 1))))
+  const month = m - 1 + n * (unit === 'y' ? 12 : 1)
+  const last = new Date(Date.UTC(y, month + 1, 0)).getUTCDate()
+  return isoDate(new Date(Date.UTC(y, month, Math.min(d, last))))
+}
+
+const isoDate = (d: Date) => d.toISOString().slice(0, 10)
