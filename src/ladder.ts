@@ -63,21 +63,32 @@ export function isoWeek(date: string): { week: string; thursday: string } {
   return { week: `${year}-W${String(n).padStart(2, '0')}`, thursday: t.toISOString().slice(0, 10) }
 }
 
+/** Whether the date falls in the place: its day, ISO week, calendar month or year. A list holds every date. */
+export function holds(place: Place, date: string): boolean {
+  const key = {
+    list: place.key,
+    day: date,
+    week: isoWeek(date).week,
+    month: date.slice(0, 7),
+    year: date.slice(0, 4),
+  }[place.kind]
+  return key === place.key
+}
+
 /**
  * A task dated `date` living at `home` shows at `here` when `here` holds the date and `home` is strictly above it.
  * A day sits under its ISO week and under its calendar month and year; the week sits under the month and year
  * of its Thursday, so a day at a month's edge climbs both ways.
  */
 export function showsAt(home: Place, date: string, here: Place): boolean {
-  const { week, thursday } = isoWeek(date)
-  const holds = { day: date, week, month: date.slice(0, 7), year: date.slice(0, 4) }
-  if (here.kind === 'list' || holds[here.kind] !== here.key) return false
+  if (here.kind === 'list' || !holds(here, date)) return false
   if (home.kind === 'list') return true
+  const { week, thursday } = isoWeek(date)
   const aboveWeek = [thursday.slice(0, 7), thursday.slice(0, 4)]
-  const above: Record<keyof typeof holds, string[]> = {
-    day: [week, holds.month, holds.year, ...aboveWeek],
+  const above: Record<Exclude<Place['kind'], 'list'>, string[]> = {
+    day: [week, date.slice(0, 7), date.slice(0, 4), ...aboveWeek],
     week: aboveWeek,
-    month: [holds.year],
+    month: [date.slice(0, 4)],
     year: [],
   }
   return above[here.kind].includes(home.key)

@@ -8,6 +8,13 @@ const ptBR = {
   'command.openWeek': 'Abrir esta semana',
   'command.openMonth': 'Abrir este mês',
   'command.openYear': 'Abrir este ano',
+  'command.moveTo': 'Mover para…',
+  'move.placeholder': 'Hoje, uma lista ou uma data: 2026-11-03, 2026-W45, 2026-11, 2026',
+  'move.today': 'Hoje',
+  'move.tomorrow': 'Amanhã',
+  'move.week': 'Esta semana',
+  'move.month': 'Este mês',
+  'move.inbox': 'Inbox',
   // marks a task shown on its DEADLINE day in a tide-tasks block
   'block.deadline': 'prazo',
   'newList.name': 'Nome',

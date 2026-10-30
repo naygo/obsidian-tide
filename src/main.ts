@@ -1,9 +1,20 @@
 import { Prec } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
-import { type App, type Editor, Plugin, TFile, debounce, editorInfoField, moment, normalizePath } from 'obsidian'
-import { type Action, orgAction } from './actions'
+import {
+  type App,
+  type Editor,
+  FuzzySuggestModal,
+  Plugin,
+  TFile,
+  debounce,
+  editorInfoField,
+  moment,
+  normalizePath,
+} from 'obsidian'
+import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { type MessageKey, t } from './i18n'
-import { type PlaceSettings, isoWeek, placeOf } from './ladder'
+import { type Place, type PlaceSettings, isoWeek, periodOf, placeOf } from './ladder'
+import { moveBlock } from './move'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
 import { TaskIndex, TasksBlock, fileAt } from './tasks'
@@ -53,6 +64,37 @@ async function createIfMissing(app: App, spec: NoteSpec): Promise<TFile | null> 
   return app.vault.create(note.path, content).catch(() => fileAt(app, note.path))
 }
 
+interface MoveTarget {
+  label: string
+  place: Place
+}
+
+/** The Move to… picker: the usual places first, then the lists, plus any day, week, month or year key typed. */
+class MoveModal extends FuzzySuggestModal<MoveTarget> {
+  constructor(
+    app: App,
+    private targets: MoveTarget[],
+    private choose: (place: Place) => void,
+  ) {
+    super(app)
+    this.setPlaceholder(t('move.placeholder'))
+  }
+
+  getItems() {
+    const key = this.inputEl.value.trim()
+    const kind = moment(key, 'YYYY-MM-DD', true).isValid() ? 'day' : periodOf(`${key}.md`, '')?.kind
+    return kind ? [{ label: key, place: { kind, key } }, ...this.targets] : this.targets
+  }
+
+  getItemText(target: MoveTarget) {
+    return target.label
+  }
+
+  onChooseItem(target: MoveTarget) {
+    this.choose(target.place)
+  }
+}
+
 function changesAt(editor: Editor, action: Action) {
   if (editor.somethingSelected()) return null
   return orgAction(editor.getValue().split('\n'), editor.getCursor().line, action, new Date())
@@ -62,11 +104,19 @@ function changesAt(editor: Editor, action: Action) {
 function runAction(editor: Editor, action: Action): boolean {
   const changes = changesAt(editor, action)
   if (!changes) return false
+  applyChanges(editor, changes)
+  return true
+}
+
+function applyChanges(editor: Editor, changes: Change[]) {
   editor.transaction({
     changes: changes.map((c) => ({ from: editor.offsetToPos(c.from), to: editor.offsetToPos(c.to), text: c.insert })),
   })
-  return true
 }
+
+/** The block at the end of the note, after its last line. */
+const appendBlock = (data: string, block: string[]) =>
+  `${data.trimEnd()}${data.trim() ? '\n' : ''}${block.join('\n')}\n`
 
 export default class TidePlugin extends Plugin {
   settings: TideSettings = DEFAULT_SETTINGS
@@ -91,11 +141,52 @@ export default class TidePlugin extends Plugin {
       this.daily = config
       this.rebuild()
     }
-    const now = moment()
-    await createIfMissing(
-      this.app,
-      dailyNote(config, now.format(config.format || DAILY_FORMAT), (f) => now.format(f)),
-    )
+    await this.day(this.dailyDay)
+  }
+
+  /** The daily note of a YYYY-MM-DD date, created from the core Daily notes template when missing. */
+  private day(date: string): Promise<TFile | null> {
+    const day = moment(date, 'YYYY-MM-DD')
+    const spec = dailyNote(this.daily, day.format(this.daily.format || DAILY_FORMAT), (f) => day.format(f))
+    return createIfMissing(this.app, spec)
+  }
+
+  /** The places Move to… offers before anything is typed. */
+  private moveTargets(): MoveTarget[] {
+    const now = today()
+    const fixed: [MessageKey, Place][] = [
+      ['move.today', { kind: 'day', key: now }],
+      ['move.tomorrow', { kind: 'day', key: moment().add(1, 'day').format('YYYY-MM-DD') }],
+      ['move.week', { kind: 'week', key: isoWeek(now).week }],
+      ['move.month', { kind: 'month', key: now.slice(0, 7) }],
+      ['move.inbox', { kind: 'list', key: this.settings.inbox }],
+    ]
+    const lists = this.app.vault
+      .getMarkdownFiles()
+      .filter((f) => f.path !== this.settings.inbox)
+      .flatMap((f) => {
+        const place = placeOf(f.path, this.app.metadataCache.getFileCache(f)?.frontmatter ?? null, this.places())
+        return place?.kind === 'list' ? [{ label: f.basename, place }] : []
+      })
+    return [...fixed.map(([label, place]) => ({ label: t(label), place })), ...lists]
+  }
+
+  /** Move to… on the block at the cursor: write it at the destination first, then cut it, so a failure duplicates instead of losing it. */
+  private async moveTo(editor: Editor, from: TFile, cursor: number, dest: Place) {
+    const file =
+      dest.kind === 'day'
+        ? await this.day(dest.key)
+        : dest.kind === 'list'
+          ? await createIfMissing(this.app, { path: dest.key, template: null, fallback: '' })
+          : await this.period(dest.key)
+    if (!file) return
+    const lines = editor.getValue().split('\n')
+    const result = moveBlock(lines, cursor, dest, today())
+    if (!result) return
+    let source = result.source
+    if (result.moved && file.path === from.path) source = appendBlock(source.join('\n'), result.moved).split('\n')
+    else if (result.moved) await this.app.vault.process(file, (data) => appendBlock(data, result.moved!))
+    applyChanges(editor, diffLines(lines, source))
   }
 
   /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
@@ -145,6 +236,19 @@ export default class TidePlugin extends Plugin {
         },
       })
     }
+
+    // no default hotkey, as the plugin guidelines ask: Move to… gets its own in Settings → Hotkeys
+    this.addCommand({
+      id: 'move-to',
+      name: t('command.moveTo'),
+      editorCheckCallback: (checking, editor, ctx) => {
+        const cursor = editor.getCursor().line
+        const from = ctx.file
+        if (checking) return !!from && !!findBlock(editor.getValue().split('\n'), cursor)
+        if (from)
+          new MoveModal(this.app, this.moveTargets(), (dest) => void this.moveTo(editor, from, cursor, dest)).open()
+      },
+    })
 
     this.addCommand({
       id: 'new-list',
