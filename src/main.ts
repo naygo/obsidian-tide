@@ -3,6 +3,8 @@ import { Decoration, type DecorationSet, type EditorView, ViewPlugin, type ViewU
 import {
   type App,
   type Editor,
+  type EditorPosition,
+  EditorSuggest,
   FuzzySuggestModal,
   Plugin,
   TFile,
@@ -12,6 +14,7 @@ import {
   normalizePath,
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
+import { type SuggestContext, type Suggestion, type Suggestions, orgSuggest } from './complete'
 import { type MessageKey, t } from './i18n'
 import {
   type OffRule,
@@ -116,6 +119,45 @@ class MoveModal extends FuzzySuggestModal<MoveTarget> {
 
   onChooseItem(target: MoveTarget) {
     this.choose(target.place)
+  }
+}
+
+/** Org autocomplete: states, tags, planning keys, dates, repeaters, the drawer, its properties and categories. */
+class OrgSuggest extends EditorSuggest<Suggestion> {
+  private found: Suggestions | null = null
+
+  constructor(
+    app: App,
+    private contextOf: (file: TFile | null) => Omit<SuggestContext, 'now'>,
+  ) {
+    super(app)
+  }
+
+  onTrigger(cursor: EditorPosition, editor: Editor, file: TFile | null) {
+    // only list items and the lines under them take org words
+    if (!/^(\s|- )/.test(editor.getLine(cursor.line))) return null
+    // ponytail: the whole note is split on each key press in a list item, as the off-rule marks do; hand orgSuggest
+    // the block alone if long notes lag
+    const lines = editor.getValue().split('\n')
+    this.found = orgSuggest(lines, cursor.line, cursor.ch, { ...this.contextOf(file), now: new Date() })
+    if (!this.found?.items.length) return null
+    const { from, to } = this.found
+    return { start: { line: cursor.line, ch: from }, end: { line: cursor.line, ch: to }, query: '' }
+  }
+
+  getSuggestions() {
+    return this.found?.items ?? []
+  }
+
+  renderSuggestion(s: Suggestion, el: HTMLElement) {
+    el.setText(s.label)
+  }
+
+  selectSuggestion(s: Suggestion) {
+    if (!this.context) return
+    const { editor, start, end } = this.context
+    editor.replaceRange(s.text, start, end)
+    editor.setCursor(editor.offsetToPos(editor.posToOffset(start) + (s.cursor ?? s.text.length)))
   }
 }
 
@@ -390,6 +432,16 @@ export default class TidePlugin extends Plugin {
         if (file) this.fix(editor, file, cursor)
       },
     })
+    this.registerEditorSuggest(
+      new OrgSuggest(this.app, (file) => {
+        const place = file && this.placeOfFile(file)
+        return {
+          list: place?.kind === 'list',
+          day: place?.kind === 'day' ? place.key : null,
+          ...this.index.vocabulary(),
+        }
+      }),
+    )
     this.registerEditorExtension(
       offRuleMarks((view) => {
         const file = view.state.field(editorInfoField, false)?.file

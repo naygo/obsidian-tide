@@ -1,5 +1,6 @@
 import { type App, Events, MarkdownRenderChild, TFile } from 'obsidian'
 import { type Change, orgAction } from './actions'
+import { vocabulary } from './complete'
 import { t } from './i18n'
 import {
   type Place,
@@ -32,6 +33,8 @@ export class TaskIndex extends Events {
   private files = new Map<string, IndexedTask[]>()
   /** files of a day, week, month or year with open undated tasks, which are pending once their period is over */
   private undated = new Map<string, { home: Place; count: number }>()
+  /** tags and categories of every note, on the ladder or not, for the autocomplete */
+  private words = new Map<string, { tags: string[]; categories: string[] }>()
 
   constructor(
     private app: App,
@@ -42,6 +45,7 @@ export class TaskIndex extends Events {
 
   async rebuild() {
     this.files.clear()
+    this.words.clear()
     for (const file of this.app.vault.getMarkdownFiles()) {
       // a file deleted mid-scan must not stop the rest of the vault from being indexed
       const data = await this.app.vault.cachedRead(file).catch(() => null)
@@ -56,6 +60,7 @@ export class TaskIndex extends Events {
   }
 
   remove(path: string) {
+    this.words.delete(path)
     const dated = this.files.delete(path)
     if (this.undated.delete(path) || dated) this.trigger('changed')
   }
@@ -63,6 +68,15 @@ export class TaskIndex extends Events {
   /** The files holding pending tasks on `today`, and how many blocks each would migrate. */
   pending(today: string): { path: string; count: number }[] {
     return [...this.undated].flatMap(([path, { home, count }]) => (ended(home, today) ? [{ path, count }] : []))
+  }
+
+  /** The tags and categories already used in the vault, each once. */
+  vocabulary(): { tags: string[]; categories: string[] } {
+    const all = [...this.words.values()]
+    return {
+      tags: [...new Set(all.flatMap((w) => w.tags))],
+      categories: [...new Set(all.flatMap((w) => w.categories))],
+    }
   }
 
   at(here: Place): IndexedTask[] {
@@ -75,10 +89,11 @@ export class TaskIndex extends Events {
   private read(file: TFile, data: string) {
     this.files.delete(file.path)
     this.undated.delete(file.path)
+    const lines = data.split('\n')
+    this.words.set(file.path, vocabulary(lines))
     const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter ?? null
     const home = placeOf(file.path, frontmatter, this.settings())
     if (!home) return
-    const lines = data.split('\n')
     const count = home.kind === 'list' ? 0 : openUndated(lines).length
     if (count) this.undated.set(file.path, { home, count })
     const tasks = tasksIn(lines).flatMap(({ line, block }) =>

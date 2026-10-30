@@ -79,7 +79,8 @@ function transition(b: OrgBlock, action: Action, now: Date): OrgBlock | null {
   return { ...b, state, closed }
 }
 
-function stamp(d: Date): Timestamp {
+/** The local date and time of `d`, as written in CLOSED and :CREATED:. */
+export function stamp(d: Date): Timestamp {
   const p = (n: number) => String(n).padStart(2, '0')
   return {
     date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
