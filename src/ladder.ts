@@ -47,7 +47,7 @@ function isList(path: string, frontmatter: Record<string, unknown> | null, marke
 const linkName = (v: string) => v.trim().replace(/^\[\[([^|\]]*)(\|[^\]]*)?\]\]$/, '$1')
 
 /** ISO-8601 week key of a YYYY-MM-DD date, and the date of that week's Thursday. */
-function isoWeek(date: string): { week: string; thursday: string } {
+export function isoWeek(date: string): { week: string; thursday: string } {
   const [y, m, d] = date.split('-').map(Number)
   const t = new Date(Date.UTC(y, m - 1, d))
   t.setUTCDate(t.getUTCDate() + 3 - ((t.getUTCDay() + 6) % 7))
@@ -56,17 +56,24 @@ function isoWeek(date: string): { week: string; thursday: string } {
   return { week: `${year}-W${String(n).padStart(2, '0')}`, thursday: t.toISOString().slice(0, 10) }
 }
 
-/** The periods a date climbs through: day, its ISO week, the month of that week's Thursday, that month's year. */
-export function chain(date: string): [string, string, string, string] {
-  const { week, thursday } = isoWeek(date)
-  return [date, week, thursday.slice(0, 7), thursday.slice(0, 4)]
-}
-
-/** A task dated `date` living at `home` shows at `here` when `here` holds the date and `home` is strictly above it. */
+/**
+ * A task dated `date` living at `home` shows at `here` when `here` holds the date and `home` is strictly above it.
+ * A day sits under its ISO week and under its calendar month and year; the week sits under the month and year
+ * of its Thursday, so a day at a month's edge climbs both ways.
+ */
 export function showsAt(home: Place, date: string, here: Place): boolean {
-  const c = chain(date)
-  const at = c.indexOf(here.key)
-  return here.kind !== 'list' && at >= 0 && (home.kind === 'list' || c.indexOf(home.key) > at)
+  const { week, thursday } = isoWeek(date)
+  const holds = { day: date, week, month: date.slice(0, 7), year: date.slice(0, 4) }
+  if (here.kind === 'list' || holds[here.kind] !== here.key) return false
+  if (home.kind === 'list') return true
+  const aboveWeek = [thursday.slice(0, 7), thursday.slice(0, 4)]
+  const above: Record<keyof typeof holds, string[]> = {
+    day: [week, holds.month, holds.year, ...aboveWeek],
+    week: aboveWeek,
+    month: [holds.year],
+    year: [],
+  }
+  return above[here.kind].includes(home.key)
 }
 
 export interface TaskDate {

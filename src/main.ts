@@ -3,7 +3,7 @@ import { keymap } from '@codemirror/view'
 import { type App, type Editor, Plugin, TFile, debounce, editorInfoField, moment, normalizePath } from 'obsidian'
 import { type Action, orgAction } from './actions'
 import { type MessageKey, t } from './i18n'
-import { chain, placeOf } from './ladder'
+import { isoWeek, placeOf } from './ladder'
 import { type DailyConfig, type NoteSpec, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
 import { TaskIndex, TasksBlock, fileAt } from './tasks'
@@ -16,7 +16,7 @@ const KEYS: [string, Action][] = [
 ]
 
 const PERIOD_COMMANDS: [string, MessageKey, (today: string) => string][] = [
-  ['open-week', 'command.openWeek', (d) => chain(d)[1]],
+  ['open-week', 'command.openWeek', (d) => isoWeek(d).week],
   ['open-month', 'command.openMonth', (d) => d.slice(0, 7)],
   ['open-year', 'command.openYear', (d) => d.slice(0, 4)],
 ]

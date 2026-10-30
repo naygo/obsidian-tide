@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type Place, type PlaceSettings, chain, placeOf, showsAt, taskDates, tasksIn } from './ladder'
+import { type Place, type PlaceSettings, isoWeek, placeOf, showsAt, taskDates, tasksIn } from './ladder'
 import { parseBlock } from './org'
 
 const SETTINGS: PlaceSettings = { periodsFolder: '', inbox: 'inbox.md', listMarker: 'categories: [[lists]]' }
@@ -41,23 +41,14 @@ describe('placeOf', () => {
   })
 })
 
-describe('chain', () => {
-  it('climbs day → ISO week → month of its Thursday → year', () => {
-    expect(chain('2026-10-30')).toEqual(['2026-10-30', '2026-W44', '2026-10', '2026'])
-  })
-
-  it('puts a week across months in the month of its Thursday', () => {
-    // W44 runs Mon Oct 26 to Sun Nov 1, Thursday Oct 29
-    expect(chain('2026-11-01')).toEqual(['2026-11-01', '2026-W44', '2026-10', '2026'])
-    // W49 runs Mon Nov 30 to Sun Dec 6, Thursday Dec 3
-    expect(chain('2026-11-30')).toEqual(['2026-11-30', '2026-W49', '2026-12', '2026'])
-  })
-
-  it('follows the Thursday across years too', () => {
-    // 2026 has 53 weeks: W53 runs Mon Dec 28 to Sun Jan 3, Thursday Dec 31
-    expect(chain('2027-01-01')).toEqual(['2027-01-01', '2026-W53', '2026-12', '2026'])
-    // 2025-W01 starts Mon Dec 30 2024
-    expect(chain('2024-12-30')).toEqual(['2024-12-30', '2025-W01', '2025-01', '2025'])
+describe('isoWeek', () => {
+  it('gives the ISO week of a date and the Thursday that names its month', () => {
+    expect(isoWeek('2026-10-30')).toEqual({ week: '2026-W44', thursday: '2026-10-29' })
+    // W44 runs Mon Oct 26 to Sun Nov 1
+    expect(isoWeek('2026-11-01')).toEqual({ week: '2026-W44', thursday: '2026-10-29' })
+    // 2026 has 53 weeks: W53 runs Mon Dec 28 to Sun Jan 3
+    expect(isoWeek('2027-01-01')).toEqual({ week: '2026-W53', thursday: '2026-12-31' })
+    expect(isoWeek('2024-12-30')).toEqual({ week: '2025-W01', thursday: '2025-01-02' })
   })
 })
 
@@ -72,6 +63,15 @@ describe('showsAt', () => {
       expect(showsAt(LIST, '2026-10-30', here)).toBe(false)
   })
 
+  it('puts a day in its calendar month and year, even when its week belongs elsewhere', () => {
+    expect(showsAt(LIST, '2026-11-01', month('2026-11'))).toBe(true)
+    expect(showsAt(LIST, '2026-11-01', month('2026-10'))).toBe(false)
+    expect(showsAt(LIST, '2026-11-01', week('2026-W44'))).toBe(true)
+    expect(showsAt(LIST, '2027-01-01', year('2027'))).toBe(true)
+    expect(showsAt(LIST, '2027-01-01', year('2026'))).toBe(false)
+    expect(showsAt(LIST, '2027-01-01', week('2026-W53'))).toBe(true)
+  })
+
   it('never shows a task above or beside where it lives', () => {
     const home = month('2026-10')
     expect(showsAt(home, '2026-10-30', year('2026'))).toBe(false)
@@ -80,9 +80,19 @@ describe('showsAt', () => {
     expect(showsAt(home, '2026-10-30', day('2026-10-30'))).toBe(true)
     // dated outside its month: beside, so nowhere
     expect(showsAt(month('2026-09'), '2026-10-30', day('2026-10-30'))).toBe(false)
-    // Nov 1 belongs to the October week, not to the November month file
-    expect(showsAt(month('2026-11'), '2026-11-01', day('2026-11-01'))).toBe(false)
+  })
+
+  it('follows the Thursday for a week across months', () => {
+    // W44 belongs to October: below the October file, beside the November one
+    expect(showsAt(month('2026-10'), '2026-11-01', week('2026-W44'))).toBe(true)
+    expect(showsAt(month('2026-11'), '2026-11-01', week('2026-W44'))).toBe(false)
+    // Nov 1 sits under its week (so under October) and under November
     expect(showsAt(month('2026-10'), '2026-11-01', day('2026-11-01'))).toBe(true)
+    expect(showsAt(month('2026-11'), '2026-11-01', day('2026-11-01'))).toBe(true)
+    // across years: W53 belongs to 2026, Jan 1 2027 to both
+    expect(showsAt(year('2026'), '2027-01-01', week('2026-W53'))).toBe(true)
+    expect(showsAt(year('2026'), '2027-01-01', day('2027-01-01'))).toBe(true)
+    expect(showsAt(year('2026'), '2027-01-01', month('2027-01'))).toBe(false)
   })
 
   it('shows a week task only in its days', () => {
