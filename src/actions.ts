@@ -3,13 +3,13 @@ import {
   type OrgBlock,
   STATES,
   type State,
-  type Timestamp,
   formatTimestamp,
   parseBlock,
   parseHead,
   serializeClosed,
   serializeHead,
   shiftDate,
+  stamp,
 } from './org'
 
 export type Action = 'nextState' | 'prevState' | 'priorityUp' | 'priorityDown'
@@ -77,16 +77,6 @@ function transition(b: OrgBlock, action: Action, now: Date): OrgBlock | null {
   const closing = CLOSED_STATES.includes(state)
   const closed = !closing ? null : CLOSED_STATES.includes(b.state) && b.closed ? b.closed : stamp(now)
   return { ...b, state, closed }
-}
-
-/** The local date and time of `d`, as written in CLOSED and :CREATED:. */
-export function stamp(d: Date): Timestamp {
-  const p = (n: number) => String(n).padStart(2, '0')
-  return {
-    date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-    time: `${p(d.getHours())}:${p(d.getMinutes())}`,
-    repeater: null,
-  }
 }
 
 export const leadOf = (l: string) => l.match(/^\s*/)![0]

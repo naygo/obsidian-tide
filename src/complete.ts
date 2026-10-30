@@ -1,16 +1,22 @@
-import { findBlock, stamp } from './actions'
-import { STATES, formatTimestamp, parseBlock, parseHead, shiftDate } from './org'
+import { findBlock } from './actions'
+import { STATES, formatTimestamp, parseBlock, parseHead, shiftDate, stamp } from './org'
 
-export interface SuggestContext {
+/** Tags and categories already used in the vault. */
+export interface Vocabulary {
+  tags: string[]
+  categories: string[]
+}
+
+export interface SuggestContext extends Vocabulary {
   /** the file is a list, the Inbox included: only there a repeater is offered */
   list: boolean
   /** the date of the daily being edited, or null in any other file */
   day: string | null
-  /** tags and categories already used in the vault */
-  tags: string[]
-  categories: string[]
   now: Date
 }
+
+/** label, inserted text and where the cursor lands in it */
+type Candidate = [string, string, number?]
 
 export interface Suggestion {
   label: string
@@ -45,10 +51,11 @@ const PROPERTIES = ['CATEGORY', 'ABOUT']
 /** What to suggest with the cursor at column `ch` of `line`, or null when nothing applies there. */
 export function orgSuggest(lines: string[], line: number, ch: number, ctx: SuggestContext): Suggestions | null {
   const before = lines[line].slice(0, ch)
+  // inside a word, a suggestion would only replace its first half
+  if (/^[\p{L}\d]/u.test(lines[line].slice(ch))) return null
   const state = HEAD_WORD.exec(before)
   if (state)
     return offer(
-      ch - state[1].length,
       ch,
       state[1],
       STATES.map((s) => [s, s + ' ']),
@@ -59,7 +66,6 @@ export function orgSuggest(lines: string[], line: number, ch: number, ctx: Sugge
     const has = typed.split(':')
     const fresh = ctx.tags.filter((tag) => !has.includes(tag))
     return offer(
-      ch - query.length,
       ch,
       query,
       fresh.map((tag) => [tag, tag + ':']),
@@ -76,61 +82,54 @@ function childSuggest(lines: string[], line: number, before: string, ctx: Sugges
   const date = DATE.exec(before)
   if (date) return dateSuggest(date[1], date[2], ch, lines[line].slice(ch), ctx)
   const repeater = REPEATER.exec(before)
-  if (repeater) {
-    const query = repeater[1] ?? ''
+  if (repeater)
     return ctx.list
       ? offer(
-          ch - query.length,
           ch,
-          query,
+          repeater[1] ?? '',
           REPEATERS.map((r) => [r, r]),
         )
       : null
-  }
   // what sits above the cursor in the block, parsed as the parser will read it
   const above = parseBlock(lines.slice(range.start, line))!
-  const onlyPlanning = above.planning.length === line - range.start - 1
+  // and the whole block but the cursor line, for what it already has
+  const rest = parseBlock([...lines.slice(range.start, line), ...lines.slice(line + 1, range.end)])!
 
   const word = CHILD_WORD.exec(before)
   if (word) {
-    if (!onlyPlanning) return null
-    const keys = (['SCHEDULED', 'DEADLINE'] as const).filter((k) => !above.planning.includes(k))
-    const s = offer(
-      ch - word[2].length,
+    // a planning line only parses right under the head or another one
+    if (above.planning.length !== line - range.start - 1) return null
+    const keys = (['SCHEDULED', 'DEADLINE'] as const).filter((k) => !rest.planning.includes(k))
+    return offer(
       ch,
       word[2],
-      keys.map((k) => [k, `${k}: <>`]),
+      keys.map((k) => [k, `${k}: <>`, k.length + 3]),
     )
-    s.items.forEach((i) => (i.cursor = i.text.length - 1))
-    return s
   }
 
-  const open = drawerAt(lines, range.start, line)
-  if (open !== null) {
+  const drawerLine = drawerAt(lines, range.start, line)
+  if (drawerLine !== null) {
     const category = CATEGORY.exec(before)
     if (category)
       return offer(
-        ch - category[1].length,
         ch,
         category[1],
         ctx.categories.map((c) => [c, c]),
       )
     const drawer = CHILD_DRAWER.exec(before)
     if (!drawer) return null
-    const has = drawerNames(lines, open, line)
-    const props = PROPERTIES.filter((p) => !has.includes(p)).map((p): [string, string] => [`:${p}:`, `:${p}: `])
-    return offer(ch - drawer[2].length, ch, drawer[2], props)
+    const has = drawerNames(lines, drawerLine, line)
+    const props = PROPERTIES.filter((p) => !has.includes(p)).map((p): Candidate => [`:${p}:`, `:${p}: `])
+    return offer(ch, drawer[2], props)
   }
 
   const drawer = CHILD_DRAWER.exec(before)
   // the drawer only parses after the planning lines, and a block has one
-  if (!drawer || above.body.length || above.properties) return null
+  if (!drawer || above.body.length || rest.properties) return null
   const ind = drawer[1]
   const created = `${ind}:CREATED: ${formatTimestamp(stamp(ctx.now), false)}`
   const text = `:PROPERTIES:\n${created}\n${ind}:END:`
-  const s = offer(ch - drawer[2].length, ch, drawer[2], [[':PROPERTIES:', text]])
-  s.items.forEach((i) => (i.cursor = text.lastIndexOf('\n')))
-  return s
+  return offer(ch, drawer[2], [[':PROPERTIES:', text, text.lastIndexOf('\n')]])
 }
 
 /** Dates with their weekday: the coming days, or the one typed in full. In a daily, SCHEDULED only keeps the time. */
@@ -142,18 +141,15 @@ function dateSuggest(key: string, query: string, ch: number, after: string, ctx:
     if (isDate(query) && !dates.includes(query)) dates.push(query)
   }
   const close = after.startsWith('>') ? '' : '>'
-  const s = offer(
-    ch - query.length,
+  return offer(
     ch,
     query,
-    dates.map((d) => {
+    dates.map((d): Candidate => {
       const label = formatTimestamp({ date: d, time: null, repeater: null }, true).slice(1, -1)
-      return [label, label + close]
+      // the cursor stays inside the brackets, for a time or a repeater
+      return [label, label + close, close ? label.length : undefined]
     }),
   )
-  // the cursor stays inside the brackets, for a time or a repeater
-  if (close) s.items.forEach((i) => (i.cursor = i.text.length - 1))
-  return s
 }
 
 /** A real YYYY-MM-DD date: 2026-02-30 is not one. */
@@ -173,27 +169,30 @@ function drawerAt(lines: string[], head: number, line: number): number | null {
   return null
 }
 
-/** The property names in the drawer opened at `open`, but the one on the cursor line. */
-function drawerNames(lines: string[], open: number, line: number): string[] {
+/** The property names in the drawer opened at `drawerLine`, but the one on the cursor line. */
+function drawerNames(lines: string[], drawerLine: number, line: number): string[] {
   const names: string[] = []
-  for (let i = open + 1; i < lines.length && lines[i].trim() !== ':END:'; i++) {
+  for (let i = drawerLine + 1; i < lines.length && lines[i].trim() !== ':END:'; i++) {
     const m = /^\s*:([^\s:]+):/.exec(lines[i])
     if (m && i !== line) names.push(m[1])
   }
   return names
 }
 
-/** The candidates starting with the query, never one equal to it: a word typed in full is not offered again. */
-function offer(from: number, to: number, query: string, candidates: [string, string][]): Suggestions {
+/**
+ * The candidates starting with the query typed up to column `ch`, never one equal to it: a word typed in full is not
+ * offered again.
+ */
+function offer(ch: number, query: string, candidates: Candidate[]): Suggestions {
   const q = query.toLowerCase()
   const items = candidates
     .filter(([label]) => label.toLowerCase().startsWith(q) && label.toLowerCase() !== q)
-    .map(([label, text]) => ({ label, text }))
-  return { from, to, items }
+    .map(([label, text, cursor]) => (cursor === undefined ? { label, text } : { label, text, cursor }))
+  return { from: ch - query.length, to: ch, items }
 }
 
 /** The tags and categories written in a note, each once, for the index to offer across the vault. */
-export function vocabulary(lines: string[]): { tags: string[]; categories: string[] } {
+export function vocabulary(lines: string[]): Vocabulary {
   const tags = new Set<string>()
   const categories = new Set<string>()
   lines.forEach((l, i) => {

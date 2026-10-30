@@ -128,6 +128,16 @@ export function formatTimestamp(ts: Timestamp, active: boolean): string {
   return active ? `<${inner}>` : `[${inner}]`
 }
 
+/** The local date and time of `d`, as written in CLOSED and :CREATED:. */
+export function stamp(d: Date): Timestamp {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return {
+    date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+    time: `${p(d.getHours())}:${p(d.getMinutes())}`,
+    repeater: null,
+  }
+}
+
 export function serializeHead(b: OrgBlock): string {
   const title = [b.state, b.priority && `[#${b.priority}]`, b.title].filter(Boolean).join(' ')
   return b.indent + '- ' + title + (b.tags.length ? `${b.tagsGap || ' '}:${b.tags.join(':')}:` : '')

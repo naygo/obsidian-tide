@@ -179,3 +179,16 @@ describe('vocabulary', () => {
     expect(vocabulary(lines)).toEqual({ tags: ['saude', 'casa', 'trabalho'], categories: ['pessoal', 'profissional'] })
   })
 })
+
+describe('the whole block counts', () => {
+  it('does not offer a key or the drawer the block has below the cursor', () => {
+    expect(texts('- TODO x\n  S|\n  SCHEDULED: <2026-10-30 sex>')).toEqual([])
+    expect(texts('- TODO x\n  :|\n  :PROPERTIES:\n  :CATEGORY: pessoal\n  :END:')).toEqual([])
+  })
+
+  it('stays quiet with the cursor inside a word', () => {
+    expect(at('- T|ODO foo')).toBeNull()
+    expect(at('- TODO x\n  SCH|EDULED: <2026-10-30 sex>')).toBeNull()
+    expect(at('- TODO x :sa|ude:', { tags: ['saude', 'sono'] })).toBeNull()
+  })
+})

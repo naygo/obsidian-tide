@@ -1,6 +1,6 @@
 import { type App, Events, MarkdownRenderChild, TFile } from 'obsidian'
 import { type Change, orgAction } from './actions'
-import { vocabulary } from './complete'
+import { type Vocabulary, vocabulary } from './complete'
 import { t } from './i18n'
 import {
   type Place,
@@ -34,7 +34,7 @@ export class TaskIndex extends Events {
   /** files of a day, week, month or year with open undated tasks, which are pending once their period is over */
   private undated = new Map<string, { home: Place; count: number }>()
   /** tags and categories of every note, on the ladder or not, for the autocomplete */
-  private words = new Map<string, { tags: string[]; categories: string[] }>()
+  private words = new Map<string, Vocabulary>()
 
   constructor(
     private app: App,
@@ -71,7 +71,7 @@ export class TaskIndex extends Events {
   }
 
   /** The tags and categories already used in the vault, each once. */
-  vocabulary(): { tags: string[]; categories: string[] } {
+  vocabulary(): Vocabulary {
     const all = [...this.words.values()]
     return {
       tags: [...new Set(all.flatMap((w) => w.tags))],
