@@ -6,10 +6,11 @@ import {
   type PlaceSettings,
   type TaskDate,
   ended,
+  indexedDates,
+  offRule,
   openUndated,
   placeOf,
-  showsAt,
-  taskDates,
+  showsEntry,
   tasksIn,
 } from './ladder'
 import type { OrgBlock } from './org'
@@ -22,6 +23,8 @@ export interface IndexedTask extends TaskDate {
   head: string
   block: OrgBlock
   home: Place
+  /** off the rule on this date: shows on this day only, where its date says, until fixed */
+  off: boolean
 }
 
 /** Every dated task of the vault that can show below where it lives. Fires 'changed' after each update. */
@@ -65,7 +68,7 @@ export class TaskIndex extends Events {
   at(here: Place): IndexedTask[] {
     return [...this.files.values()]
       .flat()
-      .filter((task) => showsAt(task.home, task.date, here))
+      .filter((task) => showsEntry(task, here))
       .sort((a, b) => a.date.localeCompare(b.date) || a.path.localeCompare(b.path) || a.line - b.line)
   }
 
@@ -78,11 +81,9 @@ export class TaskIndex extends Events {
     const lines = data.split('\n')
     const count = home.kind === 'list' ? 0 : openUndated(lines).length
     if (count) this.undated.set(file.path, { home, count })
-    // nothing sits below a day, so day files never feed a block
-    if (home.kind === 'day') return
-    const tasks = tasksIn(lines).flatMap(({ line, block }) => {
-      return taskDates(block).map((d) => ({ ...d, path: file.path, line, head: lines[line], block, home }))
-    })
+    const tasks = tasksIn(lines).flatMap(({ line, block }) =>
+      indexedDates(block, home).map((d) => ({ ...d, path: file.path, line, head: lines[line], block, home })),
+    )
     if (tasks.length) this.files.set(file.path, tasks)
   }
 }
@@ -125,6 +126,12 @@ export class TasksBlock extends MarkdownRenderChild {
       button.addEventListener('click', () => void advance(this.app, task))
       if (priority) li.createSpan({ cls: 'tide-priority', text: `[#${priority}]` })
       const link = li.createEl('a', { cls: 'tide-title', text: title, href: '#' })
+      // the same mark as in the editor, on every row of a task off the rule, not only the one shown off its place
+      const why = offRule(task.block, task.home)
+      if (why) {
+        link.addClass('tide-off-rule')
+        link.setAttr('title', t(`offRule.${why}`))
+      }
       link.addEventListener('click', (e) => {
         e.preventDefault()
         void openAt(this.app, task)

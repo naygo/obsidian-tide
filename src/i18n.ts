@@ -10,11 +10,16 @@ const ptBR = {
   'command.openYear': 'Abrir este ano',
   'command.moveTo': 'Mover para…',
   'command.migrate': 'Migrar pendentes para hoje',
+  'command.fix': 'Corrigir linha fora da regra',
+  // the mark on a line off the rule, shown on hover
+  'offRule.repeater': 'Repetição mora numa lista: Corrigir move para uma lista',
+  'offRule.scheduled': 'No daily, o SCHEDULED só guarda a hora: Corrigir move para o dia da data',
   // the notice in today's daily: "3 pendentes · migrar"
   'pending.one': 'pendente',
   'pending.many': 'pendentes',
   'pending.migrate': 'migrar',
   'move.placeholder': 'Hoje, uma lista ou uma data: 2026-11-03, 2026-W45, 2026-11, 2026',
+  'move.placeholderList': 'Uma lista ou a Inbox',
   'move.today': 'Hoje',
   'move.tomorrow': 'Amanhã',
   'move.week': 'Esta semana',

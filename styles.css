@@ -40,3 +40,9 @@
   color: var(--text-muted);
   font-size: var(--font-ui-small);
 }
+
+/* a line off the rule: a repeater outside a list, or a daily's SCHEDULED on another day */
+.tide-off-rule {
+  text-decoration: underline wavy var(--text-warning);
+  text-underline-offset: 3px;
+}

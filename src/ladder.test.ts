@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { type Place, type PlaceSettings, isoWeek, placeOf, showsAt, taskDates, tasksIn } from './ladder'
+import {
+  type Place,
+  type PlaceSettings,
+  indexedDates,
+  isoWeek,
+  offRule,
+  offRuleHeads,
+  placeOf,
+  showsAt,
+  showsEntry,
+  taskDates,
+  tasksIn,
+} from './ladder'
 import { parseBlock } from './org'
 
 const SETTINGS: PlaceSettings = {
@@ -155,5 +167,100 @@ describe('taskDates', () => {
     expect(dates('  SCHEDULED: <2026-10-30 sex 14:00>', '  DEADLINE: <2026-10-30 sex>')).toEqual([
       { date: '2026-10-30', kind: 'deadline' },
     ])
+  })
+})
+
+describe('offRule', () => {
+  const rule = (home: Place | null, ...lines: string[]) => offRule(parseBlock(['- TODO x', ...lines])!, home)
+  const repeater = '  SCHEDULED: <2026-10-30 sex +1w>'
+
+  it('flags a repeater outside a list', () => {
+    expect(rule(LIST, repeater)).toBeNull()
+    expect(rule({ kind: 'list', key: 'inbox.md' }, repeater)).toBeNull()
+    for (const home of [day('2026-10-30'), { kind: 'week', key: '2026-W44' } as Place])
+      expect(rule(home, repeater)).toBe('repeater')
+  })
+
+  it("flags a daily's SCHEDULED on another day, but not its DEADLINE", () => {
+    expect(rule(day('2026-10-30'), '  SCHEDULED: <2026-10-30 sex 14:00>')).toBeNull()
+    expect(rule(day('2026-10-30'), '  SCHEDULED: <2026-10-31 sáb>')).toBe('scheduled')
+    expect(rule(day('2026-10-30'), '  DEADLINE: <2026-11-05 qui>')).toBeNull()
+    expect(rule({ kind: 'month', key: '2026-10' }, '  SCHEDULED: <2026-10-31 sáb>')).toBeNull()
+  })
+
+  it('takes the repeater first, since moving to a list fixes both', () => {
+    expect(rule(day('2026-10-30'), '  SCHEDULED: <2026-10-31 sáb +1w>')).toBe('repeater')
+  })
+
+  it('leaves notes off the ladder alone', () => {
+    expect(rule(null, repeater)).toBeNull()
+  })
+})
+
+describe('offRuleHeads', () => {
+  it('finds the head of every block off the rule, events and nested tasks included', () => {
+    const lines = [
+      '- TODO a',
+      '  SCHEDULED: <2026-10-31 sáb>',
+      '  - TODO a1',
+      '    SCHEDULED: <2026-10-30 sex>',
+      '  - [ ] passo',
+      '- reunião',
+      '  SCHEDULED: <2026-11-02 seg 10:00>',
+      '- TODO b',
+      '  SCHEDULED: <2026-10-30 sex>',
+      '- nota',
+      '  - TODO c',
+      '    SCHEDULED: <2026-10-30 sex +1d>',
+    ]
+    expect(offRuleHeads(lines, day('2026-10-30'))).toEqual([
+      [0, 'scheduled'],
+      [5, 'scheduled'],
+      [10, 'repeater'],
+    ])
+  })
+})
+
+describe('indexedDates', () => {
+  const dates = (home: Place, ...lines: string[]) => indexedDates(parseBlock(['- TODO x', ...lines])!, home)
+  const W45: Place = { kind: 'week', key: '2026-W45' }
+
+  it('is not off for a task whose date its period holds, even a repeater', () => {
+    expect(dates(W45, '  SCHEDULED: <2026-11-03 ter +1w>')).toEqual([
+      { date: '2026-11-03', kind: 'scheduled', off: false },
+    ])
+  })
+
+  it('is off on the SCHEDULED of a repeater that left its period, its DEADLINE untouched', () => {
+    expect(dates(W45, '  SCHEDULED: <2026-11-10 ter +1w>', '  DEADLINE: <2026-11-20 sex>')).toEqual([
+      { date: '2026-11-10', kind: 'scheduled', off: true },
+      { date: '2026-11-20', kind: 'deadline', off: false },
+    ])
+  })
+
+  it('feeds from a daily only its SCHEDULED on another day, labelled deadline when both match', () => {
+    const today = day('2026-10-30')
+    expect(dates(today, '  SCHEDULED: <2026-10-30 sex 14:00>', '  DEADLINE: <2026-11-05 qui>')).toEqual([])
+    expect(dates(today, '  SCHEDULED: <2026-11-02 seg>', '  DEADLINE: <2026-11-05 qui>')).toEqual([
+      { date: '2026-11-02', kind: 'scheduled', off: true },
+    ])
+    expect(dates(today, '  SCHEDULED: <2026-11-02 seg +1w>', '  DEADLINE: <2026-11-02 seg>')).toEqual([
+      { date: '2026-11-02', kind: 'deadline', off: true },
+    ])
+  })
+})
+
+describe('showsEntry', () => {
+  it('shows a date off the rule on its day only', () => {
+    const entry = { home: week('2026-W45'), date: '2026-11-10', off: true }
+    expect(showsEntry(entry, day('2026-11-10'))).toBe(true)
+    for (const here of [day('2026-11-11'), week('2026-W46'), month('2026-11'), year('2026')])
+      expect(showsEntry(entry, here)).toBe(false)
+  })
+
+  it('follows the ladder otherwise', () => {
+    const entry = { home: week('2026-W45'), date: '2026-11-03', off: false }
+    expect(showsEntry(entry, day('2026-11-03'))).toBe(true)
+    expect(showsEntry(entry, month('2026-11'))).toBe(false)
   })
 })

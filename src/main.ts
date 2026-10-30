@@ -1,5 +1,5 @@
-import { Prec } from '@codemirror/state'
-import { keymap } from '@codemirror/view'
+import { Prec, RangeSetBuilder } from '@codemirror/state'
+import { Decoration, type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate, keymap } from '@codemirror/view'
 import {
   type App,
   type Editor,
@@ -13,8 +13,20 @@ import {
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { type MessageKey, t } from './i18n'
-import { type Place, type PlaceSettings, firstDay, holds, isoWeek, periodOf, placeOf } from './ladder'
+import {
+  type OffRule,
+  type Place,
+  type PlaceSettings,
+  firstDay,
+  holds,
+  isoWeek,
+  offRule,
+  offRuleHeads,
+  periodOf,
+  placeOf,
+} from './ladder'
 import { migrate, moveBlock } from './move'
+import { parseBlock } from './org'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
 import { TaskIndex, TasksBlock, fileAt } from './tasks'
@@ -85,14 +97,16 @@ class MoveModal extends FuzzySuggestModal<MoveTarget> {
     app: App,
     private targets: MoveTarget[],
     private choose: (place: Place) => void,
+    /** Fix on a repeater: only a list fixes it, so a typed day or period is not offered */
+    private listsOnly = false,
   ) {
     super(app)
-    this.setPlaceholder(t('move.placeholder'))
+    this.setPlaceholder(t(listsOnly ? 'move.placeholderList' : 'move.placeholder'))
   }
 
   getItems() {
     const key = this.inputEl.value.trim()
-    const place = typedPlace(key)
+    const place = this.listsOnly ? null : typedPlace(key)
     return place ? [{ label: key, place }, ...this.targets] : this.targets
   }
 
@@ -127,6 +141,48 @@ function applyChanges(editor: Editor, changes: Change[]) {
 /** The block at the end of the note, after its last line. */
 const appendBlock = (data: string, block: string[]) =>
   `${data.trimEnd()}${data.trim() ? '\n' : ''}${block.join('\n')}\n`
+
+const offRuleMark = (why: OffRule) =>
+  Decoration.line({ class: 'tide-off-rule', attributes: { title: t(`offRule.${why}`) } })
+const OFF_RULE = { repeater: offRuleMark('repeater'), scheduled: offRuleMark('scheduled') }
+
+/**
+ * The mark on the head line of each block off the rule.
+ * ponytail: redrawn on edits and when the note's place changes, noticed on any interaction (cursor, focus); a list
+ * marker or setting changed elsewhere shows once the note is touched. Refresh on the index's 'changed' if that matters.
+ */
+function offRuleMarks(homeOf: (view: EditorView) => Place | null) {
+  const build = (view: EditorView, home: Place | null): DecorationSet => {
+    const doc = view.state.doc
+    const lines = doc.toString().split('\n')
+    const builder = new RangeSetBuilder<Decoration>()
+    for (const [head, why] of offRuleHeads(lines, home)) {
+      const from = doc.line(head + 1).from
+      builder.add(from, from, OFF_RULE[why])
+    }
+    return builder.finish()
+  }
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet
+      // the file may not be known yet when the editor opens, so the place is checked again on each update
+      home: string
+      constructor(view: EditorView) {
+        const home = homeOf(view)
+        this.home = JSON.stringify(home)
+        this.decorations = build(view, home)
+      }
+      update(u: ViewUpdate) {
+        const home = homeOf(u.view)
+        const key = JSON.stringify(home)
+        if (!u.docChanged && key === this.home) return
+        this.home = key
+        this.decorations = build(u.view, home)
+      }
+    },
+    { decorations: (v) => v.decorations },
+  )
+}
 
 export default class TidePlugin extends Plugin {
   settings: TideSettings = DEFAULT_SETTINGS
@@ -185,10 +241,35 @@ export default class TidePlugin extends Plugin {
     return [...fixed.map(([label, place]) => ({ label: t(label), place })), ...lists]
   }
 
+  /** The place of a file on the ladder, or null off it. */
+  private placeOfFile(file: TFile): Place | null {
+    return placeOf(file.path, this.app.metadataCache.getFileCache(file)?.frontmatter ?? null, this.places())
+  }
+
+  /** The block at the cursor when it is off the rule, and why. */
+  private offRuleAt(editor: Editor, file: TFile, cursor: number) {
+    const lines = editor.getValue().split('\n')
+    const range = findBlock(lines, cursor)
+    // a block found by findBlock always parses
+    const block = range && parseBlock(lines.slice(range.start, range.end))!
+    const why = block && offRule(block, this.placeOfFile(file))
+    return why ? { block, why } : null
+  }
+
+  /** Fix: a repeater goes to a list, a daily's SCHEDULED on another day goes to that day; both by Move to…. */
+  private fix(editor: Editor, file: TFile, cursor: number) {
+    const off = this.offRuleAt(editor, file, cursor)
+    if (off?.why === 'scheduled')
+      void this.moveTo(editor, file, cursor, { kind: 'day', key: off.block.scheduled!.date })
+    if (off?.why !== 'repeater') return
+    const lists = this.moveTargets().filter((target) => target.place.kind === 'list')
+    new MoveModal(this.app, lists, (dest) => void this.moveTo(editor, file, cursor, dest), true).open()
+  }
+
   /** Move to… on the block at the cursor: write it at the destination first, then cut it, so a failure duplicates instead of losing it. */
   private async moveTo(editor: Editor, from: TFile, cursor: number, dest: Place) {
     const lines = editor.getValue().split('\n')
-    const home = placeOf(from.path, this.app.metadataCache.getFileCache(from)?.frontmatter ?? null, this.places())
+    const home = this.placeOfFile(from)
     const result = moveBlock(lines, cursor, home, dest, today())
     if (!result) return
     // only a block that leaves needs the destination, so a postpone never creates a note
@@ -297,6 +378,24 @@ export default class TidePlugin extends Plugin {
           new MoveModal(this.app, this.moveTargets(), (dest) => void this.moveTo(editor, from, cursor, dest)).open()
       },
     })
+
+    // the plugin never fixes by itself: only this command does, on the block at the cursor
+    this.addCommand({
+      id: 'fix',
+      name: t('command.fix'),
+      editorCheckCallback: (checking, editor, ctx) => {
+        const cursor = editor.getCursor().line
+        const file = ctx.file
+        if (checking) return !!file && !!this.offRuleAt(editor, file, cursor)
+        if (file) this.fix(editor, file, cursor)
+      },
+    })
+    this.registerEditorExtension(
+      offRuleMarks((view) => {
+        const file = view.state.field(editorInfoField, false)?.file
+        return file ? this.placeOfFile(file) : null
+      }),
+    )
 
     // never runs by itself: only this command and the button of the notice in today's daily
     this.addCommand({

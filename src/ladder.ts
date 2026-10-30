@@ -149,3 +149,45 @@ export function openUndated(lines: string[]): number[] {
     return [line]
   })
 }
+
+/** How a line breaks "repetition lives in a list": a repeater outside a list, or a daily's SCHEDULED on another day. */
+export type OffRule = 'repeater' | 'scheduled'
+
+/** Why the block is off the rule; the repeater first, as a list fixes both. Null off the ladder, where nothing shows it. */
+export function offRule(block: OrgBlock, home: Place | null): OffRule | null {
+  const s = block.scheduled
+  if (!s || !home) return null
+  if (s.repeater && home.kind !== 'list') return 'repeater'
+  return home.kind === 'day' && s.date !== home.key ? 'scheduled' : null
+}
+
+/** Head lines of the blocks off the rule and why, for the mark in the editor. */
+export function offRuleHeads(lines: string[], home: Place | null): [number, OffRule][] {
+  if (!home) return []
+  return lines.flatMap((l, i): [number, OffRule][] => {
+    if (!parseHead(l)) return []
+    const range = findBlock(lines, i)
+    // a loose item inside a task belongs to the task's block
+    // a head always parses, so its block does too
+    const why = range?.start === i && offRule(parseBlock(lines.slice(i, range.end))!, home)
+    return why ? [[i, why]] : []
+  })
+}
+
+/**
+ * The days a task falls on, for the index. Until fixed, a line off the rule is `off` on the day its SCHEDULED says,
+ * and shows on that day only, wherever it lives. Nothing else of a daily shows: nothing sits below a day.
+ */
+export function indexedDates(block: OrgBlock, home: Place): (TaskDate & { off: boolean })[] {
+  const why = offRule(block, home)
+  return taskDates(block).flatMap((d) => {
+    // off the rule means a SCHEDULED is there
+    const off = !!why && d.date === block.scheduled!.date && !holds(home, d.date)
+    return home.kind !== 'day' || off ? [{ ...d, off }] : []
+  })
+}
+
+/** Like showsAt, but a date off the rule shows on that day only, wherever the task lives. */
+export function showsEntry(entry: { home: Place; date: string; off: boolean }, here: Place): boolean {
+  return entry.off ? here.kind === 'day' && here.key === entry.date : showsAt(entry.home, entry.date, here)
+}
