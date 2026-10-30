@@ -5,11 +5,11 @@ const ptBR = {
   'command.priorityUp': 'Aumentar prioridade da tarefa',
   'command.priorityDown': 'Diminuir prioridade da tarefa',
   'command.newList': 'Nova lista',
-  // marks a task shown on its DEADLINE day in a tide-tasks block
-  'block.deadline': 'prazo',
   'command.openWeek': 'Abrir esta semana',
   'command.openMonth': 'Abrir este mês',
   'command.openYear': 'Abrir este ano',
+  // marks a task shown on its DEADLINE day in a tide-tasks block
+  'block.deadline': 'prazo',
   'newList.name': 'Nome',
   'newList.create': 'Criar',
   'newList.exists': 'Já existe uma nota com esse nome.',

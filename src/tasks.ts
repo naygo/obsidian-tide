@@ -110,7 +110,7 @@ export class TasksBlock extends MarkdownRenderChild {
   }
 }
 
-function fileAt(app: App, path: string): TFile | null {
+export function fileAt(app: App, path: string): TFile | null {
   const file = app.vault.getAbstractFileByPath(path)
   return file instanceof TFile ? file : null
 }

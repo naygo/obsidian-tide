@@ -1,12 +1,12 @@
 import { Prec } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
-import { type App, type Editor, Plugin, TFile, debounce, editorInfoField, moment } from 'obsidian'
+import { type App, type Editor, Plugin, TFile, debounce, editorInfoField, moment, normalizePath } from 'obsidian'
 import { type Action, orgAction } from './actions'
 import { type MessageKey, t } from './i18n'
 import { chain, placeOf } from './ladder'
 import { type DailyConfig, type NoteSpec, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
-import { TaskIndex, TasksBlock } from './tasks'
+import { TaskIndex, TasksBlock, fileAt } from './tasks'
 
 const KEYS: [string, Action][] = [
   ['Shift-ArrowRight', 'nextState'],
@@ -32,13 +32,9 @@ async function readDailyConfig(app: App): Promise<DailyConfig> {
   }
 }
 
-const fileAt = (app: App, path: string) => {
-  const file = app.vault.getAbstractFileByPath(path)
-  return file instanceof TFile ? file : null
-}
-
 /** Creates the note from its template only when nothing is at its path. Never writes over an existing file. */
-async function createIfMissing(app: App, note: NoteSpec): Promise<TFile | null> {
+async function createIfMissing(app: App, spec: NoteSpec): Promise<TFile | null> {
+  const note = { ...spec, path: normalizePath(spec.path), template: spec.template && normalizePath(spec.template) }
   // the adapter also sees a file the vault has not indexed yet, such as one a git pull just wrote
   if (app.vault.getAbstractFileByPath(note.path) || (await app.vault.adapter.exists(note.path)))
     return fileAt(app, note.path)
@@ -79,7 +75,7 @@ export default class TidePlugin extends Plugin {
     await createIfMissing(this.app, dailyNote(config, moment().format(config.format || 'YYYY-MM-DD')))
   }
 
-  /** The week, month or year note of `key`, created from its template when missing. */
+  /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
   async period(key: string): Promise<TFile | null> {
     const note = periodNote(key, this.settings)
     return note && createIfMissing(this.app, note)
@@ -111,9 +107,9 @@ export default class TidePlugin extends Plugin {
     })
     // the daily is born on startup, on coming back to the app and at midnight with the app open
     this.app.workspace.onLayoutReady(() => void this.createDaily())
-    const back = () => document.visibilityState === 'visible' && void this.createDaily()
-    this.registerDomEvent(document, 'visibilitychange', back)
-    this.registerDomEvent(window, 'focus', back)
+    const onReturn = () => document.visibilityState === 'visible' && void this.createDaily()
+    this.registerDomEvent(document, 'visibilitychange', onReturn)
+    this.registerDomEvent(window, 'focus', onReturn)
     this.registerInterval(window.setInterval(() => today() !== this.dailyDay && void this.createDaily(), 60_000))
     for (const [id, name, key] of PERIOD_COMMANDS) {
       this.addCommand({
