@@ -1,6 +1,5 @@
 import {
   type OrgBlock,
-  type Priority,
   STATES,
   type State,
   type Timestamp,
@@ -46,7 +45,7 @@ function transition(b: OrgBlock, action: Action, now: Date): OrgBlock | null {
   if (action === 'priorityUp' || action === 'priorityDown') {
     if (!b.state) return null
     const table = action === 'priorityUp' ? PRIORITY_UP : PRIORITY_DOWN
-    return { ...b, priority: table[b.priority ?? 'none'] as Priority | null }
+    return { ...b, priority: table[b.priority ?? 'none'] }
   }
   if (!b.state && action === 'prevState') return null
   const i = RING.indexOf(b.state)
