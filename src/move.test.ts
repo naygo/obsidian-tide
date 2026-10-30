@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Place } from './ladder'
-import { moveBlock } from './move'
+import { migrate, moveBlock, pendingIn } from './move'
 
 const TODAY = '2026-10-30'
 const day = (key: string): Place => ({ kind: 'day', key })
@@ -108,5 +108,59 @@ describe('moveBlock', () => {
       source: ['- projeto', '  - TODO y'],
       moved: ['- TODO x', '  - [ ] passo'],
     })
+  })
+})
+
+describe('pendingIn', () => {
+  const lines = [
+    '- TODO sem data',
+    '  DEADLINE: <2026-11-05 qui>',
+    '- DOING em andamento',
+    '  - TODO filho, vai junto com o pai',
+    '- TODO agendada',
+    '  SCHEDULED: <2026-10-20 ter>',
+    '  - TODO filho de agendada',
+    '- DONE feita',
+    '- nota solta',
+  ]
+  const pending = [0, 2, 6]
+
+  it('takes TODO and DOING without SCHEDULED from a period that is over', () => {
+    expect(pendingIn(lines, day('2026-10-29'), TODAY)).toEqual(pending)
+    expect(pendingIn(lines, { kind: 'week', key: '2026-W43' }, TODAY)).toEqual(pending)
+    expect(pendingIn(lines, { kind: 'month', key: '2026-09' }, TODAY)).toEqual(pending)
+    expect(pendingIn(lines, { kind: 'year', key: '2025' }, TODAY)).toEqual(pending)
+  })
+
+  it('takes nothing from a period still running or still to come', () => {
+    for (const home of [day(TODAY), day('2026-10-31'), { kind: 'week', key: '2026-W44' } as Place])
+      expect(pendingIn(lines, home, TODAY)).toEqual([])
+    expect(pendingIn(lines, { kind: 'month', key: '2026-10' }, TODAY)).toEqual([])
+    expect(pendingIn(lines, { kind: 'year', key: '2026' }, TODAY)).toEqual([])
+  })
+
+  it('never takes from a list', () => {
+    expect(pendingIn(lines, LIST, TODAY)).toEqual([])
+  })
+})
+
+describe('migrate', () => {
+  it('cuts every pending block and hands them over in file order, DEADLINE untouched', () => {
+    const lines = ['- TODO a', '  DEADLINE: <2026-11-05 qui>', '- DONE b', '- DOING c', '  - TODO c1']
+    expect(migrate(lines, day('2026-10-29'), TODAY)).toEqual({
+      source: ['- DONE b'],
+      moved: ['- TODO a', '  DEADLINE: <2026-11-05 qui>', '- DOING c', '  - TODO c1'],
+    })
+  })
+
+  it('moves a nested pending task out to the top level', () => {
+    expect(migrate(['- DONE pai', '  - TODO filho'], day('2026-10-29'), TODAY)).toEqual({
+      source: ['- DONE pai'],
+      moved: ['- TODO filho'],
+    })
+  })
+
+  it('is null when nothing is pending', () => {
+    expect(migrate(['- TODO a'], day(TODAY), TODAY)).toBeNull()
   })
 })

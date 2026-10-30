@@ -9,6 +9,11 @@ const ptBR = {
   'command.openMonth': 'Abrir este mês',
   'command.openYear': 'Abrir este ano',
   'command.moveTo': 'Mover para…',
+  'command.migrate': 'Migrar pendentes para hoje',
+  // the notice in today's daily: "3 pendentes · migrar"
+  'pending.one': 'pendente',
+  'pending.many': 'pendentes',
+  'pending.migrate': 'migrar',
   'move.placeholder': 'Hoje, uma lista ou uma data: 2026-11-03, 2026-W45, 2026-11, 2026',
   'move.today': 'Hoje',
   'move.tomorrow': 'Amanhã',

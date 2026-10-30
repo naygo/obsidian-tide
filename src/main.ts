@@ -14,7 +14,7 @@ import {
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { type MessageKey, t } from './i18n'
 import { type Place, type PlaceSettings, firstDay, holds, isoWeek, periodOf, placeOf } from './ladder'
-import { moveBlock } from './move'
+import { migrate, moveBlock } from './move'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
 import { TaskIndex, TasksBlock, fileAt } from './tasks'
@@ -136,6 +136,8 @@ export default class TidePlugin extends Plugin {
   private rebuild = debounce(() => void this.index.rebuild(), 500, true)
   /** the day the daily was last created for, to notice midnight */
   private dailyDay = ''
+  /** a second run would read the same files and append their blocks to the daily again */
+  private migrating = false
 
   /** The settings the ladder needs, with the core Daily notes deciding which files are days. */
   private places(): PlaceSettings {
@@ -144,6 +146,8 @@ export default class TidePlugin extends Plugin {
 
   /** Creates today's daily from the core Daily notes settings when it is missing. */
   private async createDaily() {
+    // a new day: other periods are over, so the pending notice counts again
+    if (this.dailyDay && this.dailyDay !== today()) this.index.trigger('changed')
     this.dailyDay = today()
     const config = await readDailyConfig(this.app)
     // other folder or format: other files are days now
@@ -203,6 +207,35 @@ export default class TidePlugin extends Plugin {
     applyChanges(editor, diffLines(lines, result.source))
   }
 
+  /** Migrate pending to today: each file's pending blocks go to the end of today's daily first, then leave the file. */
+  private async migratePending() {
+    if (this.migrating) return
+    this.migrating = true
+    try {
+      await this.migrateAll()
+    } finally {
+      this.migrating = false
+    }
+  }
+
+  private async migrateAll() {
+    const now = today()
+    const pending = this.index.pending(now)
+    const daily = pending.length ? await this.day(now) : null
+    if (!daily) return
+    for (const { path } of pending) {
+      const file = fileAt(this.app, path)
+      if (!file) continue
+      const data = await this.app.vault.read(file)
+      const home = placeOf(path, this.app.metadataCache.getFileCache(file)?.frontmatter ?? null, this.places())
+      const result = home && migrate(data.split('\n'), home, now)
+      if (!result) continue
+      await this.app.vault.process(daily, (d) => appendBlock(d, result.moved))
+      // edited meanwhile: the cut would land on the wrong lines, so the blocks stay in both places
+      await this.app.vault.process(file, (d) => (d === data ? result.source.join('\n') : d))
+    }
+  }
+
   /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
   async period(key: string): Promise<TFile | null> {
     const note = periodNote(key, this.settings)
@@ -232,7 +265,8 @@ export default class TidePlugin extends Plugin {
       }),
     )
     this.registerMarkdownCodeBlockProcessor('tide-tasks', (_source, el, ctx) => {
-      ctx.addChild(new TasksBlock(el, this.app, this.index, () => placeOf(ctx.sourcePath, null, this.places())))
+      const place = () => placeOf(ctx.sourcePath, null, this.places())
+      ctx.addChild(new TasksBlock(el, this.app, this.index, place, today, () => void this.migratePending()))
     })
     // the daily is born on startup, on coming back to the app and at midnight with the app open
     this.app.workspace.onLayoutReady(() => void this.createDaily())
@@ -262,6 +296,13 @@ export default class TidePlugin extends Plugin {
         if (from)
           new MoveModal(this.app, this.moveTargets(), (dest) => void this.moveTo(editor, from, cursor, dest)).open()
       },
+    })
+
+    // never runs by itself: only this command and the button of the notice in today's daily
+    this.addCommand({
+      id: 'migrate-pending',
+      name: t('command.migrate'),
+      callback: () => void this.migratePending(),
     })
 
     this.addCommand({

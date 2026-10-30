@@ -1,7 +1,17 @@
 import { type App, Events, MarkdownRenderChild, TFile } from 'obsidian'
 import { type Change, orgAction } from './actions'
 import { t } from './i18n'
-import { type Place, type PlaceSettings, type TaskDate, placeOf, showsAt, taskDates, tasksIn } from './ladder'
+import {
+  type Place,
+  type PlaceSettings,
+  type TaskDate,
+  ended,
+  openUndated,
+  placeOf,
+  showsAt,
+  taskDates,
+  tasksIn,
+} from './ladder'
 import type { OrgBlock } from './org'
 
 /** One task on one of its days: a task with SCHEDULED and DEADLINE on different days is indexed twice. */
@@ -17,6 +27,8 @@ export interface IndexedTask extends TaskDate {
 /** Every dated task of the vault that can show below where it lives. Fires 'changed' after each update. */
 export class TaskIndex extends Events {
   private files = new Map<string, IndexedTask[]>()
+  /** files of a day, week, month or year with open undated tasks, which are pending once their period is over */
+  private undated = new Map<string, { home: Place; count: number }>()
 
   constructor(
     private app: App,
@@ -41,7 +53,13 @@ export class TaskIndex extends Events {
   }
 
   remove(path: string) {
-    if (this.files.delete(path)) this.trigger('changed')
+    const dated = this.files.delete(path)
+    if (this.undated.delete(path) || dated) this.trigger('changed')
+  }
+
+  /** The files holding pending tasks on `today`, and how many blocks each would migrate. */
+  pending(today: string): { path: string; count: number }[] {
+    return [...this.undated].flatMap(([path, { home, count }]) => (ended(home, today) ? [{ path, count }] : []))
   }
 
   at(here: Place): IndexedTask[] {
@@ -53,11 +71,15 @@ export class TaskIndex extends Events {
 
   private read(file: TFile, data: string) {
     this.files.delete(file.path)
+    this.undated.delete(file.path)
     const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter ?? null
     const home = placeOf(file.path, frontmatter, this.settings())
-    // nothing sits below a day, so day files never feed a block
-    if (!home || home.kind === 'day') return
+    if (!home) return
     const lines = data.split('\n')
+    const count = home.kind === 'list' ? 0 : openUndated(lines).length
+    if (count) this.undated.set(file.path, { home, count })
+    // nothing sits below a day, so day files never feed a block
+    if (home.kind === 'day') return
     const tasks = tasksIn(lines).flatMap(({ line, block }) => {
       return taskDates(block).map((d) => ({ ...d, path: file.path, line, head: lines[line], block, home }))
     })
@@ -73,6 +95,9 @@ export class TasksBlock extends MarkdownRenderChild {
     private index: TaskIndex,
     /** read on each render, so a change in the settings reaches open blocks */
     private place: () => Place | null,
+    private today: () => string,
+    /** runs Migrate pending to today, from the notice in today's daily */
+    private migrate: () => void,
   ) {
     super(el)
   }
@@ -85,6 +110,7 @@ export class TasksBlock extends MarkdownRenderChild {
   private render() {
     this.containerEl.empty()
     const here = this.place()
+    if (here?.kind === 'day' && here.key === this.today()) this.renderPending(here.key)
     const tasks = here ? this.index.at(here) : []
     if (!tasks.length) return
     const ul = this.containerEl.createEl('ul', { cls: 'tide-tasks' })
@@ -107,6 +133,18 @@ export class TasksBlock extends MarkdownRenderChild {
       if (here!.kind !== 'day') li.createSpan({ cls: 'tide-date', text: task.date })
       li.createSpan({ cls: 'tide-source', text: task.path.replace(/\.md$/, '') })
     }
+  }
+
+  /** "N pendentes · migrar" in today's daily, gone when nothing is pending. */
+  private renderPending(today: string) {
+    const count = this.index.pending(today).reduce((n, f) => n + f.count, 0)
+    if (!count) return
+    const div = this.containerEl.createDiv({
+      cls: 'tide-pending',
+      text: `${count} ${t(count === 1 ? 'pending.one' : 'pending.many')} · `,
+    })
+    const button = div.createEl('button', { text: t('pending.migrate'), attr: { 'aria-label': t('command.migrate') } })
+    button.addEventListener('click', () => this.migrate())
   }
 }
 

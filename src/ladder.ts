@@ -133,3 +133,18 @@ export function tasksIn(lines: string[]): FoundTask[] {
     return [{ line, block: parseBlock(lines.slice(start, end))! }]
   })
 }
+
+/** Whether the day, week, month or year is over by `today`. A list never is. */
+export function ended(place: Place, today: string): boolean {
+  return place.kind !== 'list' && firstDay(place) < today && !holds(place, today)
+}
+
+/** Head lines of the TODO and DOING without SCHEDULED; one inside another travels with it, so only the outer counts. */
+export function openUndated(lines: string[]): number[] {
+  let end = 0
+  return tasksIn(lines).flatMap(({ line, block }) => {
+    if (line < end || block.scheduled || (block.state !== 'TODO' && block.state !== 'DOING')) return []
+    end = findBlock(lines, line)!.end
+    return [line]
+  })
+}
