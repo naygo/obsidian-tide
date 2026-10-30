@@ -32,7 +32,7 @@ import {
 import { migrate, moveBlock } from './move'
 import { parseBlock } from './org'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
-import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
+import { DEFAULT_SETTINGS, NewListModal, THEMES, type TideSettings, TideSettingTab } from './settings'
 import { TaskIndex, TasksBlock, fileAt } from './tasks'
 
 const KEYS: [string, Exclude<Action, 'nextBox'>][] = [
@@ -47,6 +47,9 @@ const PERIOD_COMMANDS: [string, MessageKey, (today: string) => string][] = [
   ['open-month', 'command.openMonth', (d) => d.slice(0, 7)],
   ['open-year', 'command.openYear', (d) => d.slice(0, 4)],
 ]
+
+// ponytail: only the main window's body; pop-out windows keep Obsidian's colors, add them on 'window-open' if wanted
+const THEME_CLASSES = THEMES.map((theme) => `tide-theme-${theme}`)
 
 const today = () => moment().format('YYYY-MM-DD')
 
@@ -249,6 +252,12 @@ export default class TidePlugin extends Plugin {
     this.app.workspace.updateOptions()
   }
 
+  /** The theme is a class on the body; its colors live in styles.css. */
+  private applyTheme() {
+    document.body.removeClasses(THEME_CLASSES)
+    document.body.addClass(`tide-theme-${this.settings.theme}`)
+  }
+
   /** The settings the ladder needs, with the core Daily notes deciding which files are days. */
   private places(): PlaceSettings {
     return { ...this.settings, dayOf: (path) => dayOf(this.daily, path) }
@@ -381,6 +390,7 @@ export default class TidePlugin extends Plugin {
     await this.saveData(this.settings)
     this.rebuild()
     this.applyVisual()
+    this.applyTheme()
   }
 
   async onload() {
@@ -388,6 +398,7 @@ export default class TidePlugin extends Plugin {
     this.addSettingTab(new TideSettingTab(this.app, this))
     this.daily = await readDailyConfig(this.app)
     this.applyVisual()
+    this.applyTheme()
     this.registerEditorExtension(this.editor)
 
     this.app.workspace.onLayoutReady(() => void this.index.rebuild())
@@ -510,5 +521,9 @@ export default class TidePlugin extends Plugin {
         },
       })
     }
+  }
+
+  onunload() {
+    document.body.removeClasses(THEME_CLASSES)
   }
 }

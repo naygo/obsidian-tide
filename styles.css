@@ -47,42 +47,152 @@
   text-underline-offset: 3px;
 }
 
+/* the color themes: the colors of the states and org words; Obsidian's .theme-light/.theme-dark pick the variant */
+body {
+  --tide-todo: var(--color-red);
+  --tide-doing: var(--color-orange);
+  --tide-done: var(--color-green);
+  --tide-canceled: var(--text-faint);
+  --tide-pri: var(--color-yellow);
+  --tide-tags: var(--color-purple);
+  --tide-planning: var(--color-cyan);
+}
+
+body.tide-theme-doom-one.theme-dark {
+  --tide-todo: #ff6c6b;
+  --tide-doing: #da8548;
+  --tide-done: #98be65;
+  --tide-canceled: #5b6268;
+  --tide-pri: #ecbe7b;
+  --tide-tags: #c678dd;
+  --tide-planning: #46d9ff;
+}
+
+body.tide-theme-doom-one.theme-light {
+  --tide-todo: #e45649;
+  --tide-doing: #da8548;
+  --tide-done: #50a14f;
+  --tide-canceled: #9ca0a4;
+  --tide-pri: #986801;
+  --tide-tags: #a626a4;
+  --tide-planning: #0184bc;
+}
+
+body.tide-theme-gruvbox.theme-dark {
+  --tide-todo: #fb4934;
+  --tide-doing: #fe8019;
+  --tide-done: #b8bb26;
+  --tide-canceled: #928374;
+  --tide-pri: #fabd2f;
+  --tide-tags: #d3869b;
+  --tide-planning: #8ec07c;
+}
+
+body.tide-theme-gruvbox.theme-light {
+  --tide-todo: #9d0006;
+  --tide-doing: #af3a03;
+  --tide-done: #79740e;
+  --tide-canceled: #928374;
+  --tide-pri: #b57614;
+  --tide-tags: #8f3f71;
+  --tide-planning: #427b58;
+}
+
+body.tide-theme-solarized {
+  --tide-todo: #dc322f;
+  --tide-doing: #cb4b16;
+  --tide-done: #859900;
+  --tide-pri: #b58900;
+  --tide-tags: #6c71c4;
+  --tide-planning: #2aa198;
+}
+
+body.tide-theme-solarized.theme-dark {
+  --tide-canceled: #586e75;
+}
+
+body.tide-theme-solarized.theme-light {
+  --tide-canceled: #93a1a1;
+}
+
+/* Mocha in dark, Latte in light */
+body.tide-theme-catppuccin.theme-dark {
+  --tide-todo: #f38ba8;
+  --tide-doing: #fab387;
+  --tide-done: #a6e3a1;
+  --tide-canceled: #6c7086;
+  --tide-pri: #f9e2af;
+  --tide-tags: #cba6f7;
+  --tide-planning: #89dceb;
+}
+
+body.tide-theme-catppuccin.theme-light {
+  --tide-todo: #d20f39;
+  --tide-doing: #fe640b;
+  --tide-done: #40a02b;
+  --tide-canceled: #9ca0b0;
+  --tide-pri: #df8e1d;
+  --tide-tags: #8839ef;
+  --tide-planning: #04a5e5;
+}
+
 /* the Org visual: the org words of a task in color */
 .tide-kw {
   font-weight: var(--bold-weight);
 }
 
 .tide-kw-todo {
-  color: var(--color-red);
+  color: var(--tide-todo);
 }
 
 .tide-kw-doing {
-  color: var(--color-orange);
+  color: var(--tide-doing);
 }
 
 .tide-kw-done {
-  color: var(--color-green);
+  color: var(--tide-done);
 }
 
 .tide-kw-canceled {
-  color: var(--text-faint);
+  color: var(--tide-canceled);
 }
 
 .tide-pri {
-  color: var(--color-yellow);
+  color: var(--tide-pri);
 }
 
 .tide-tags {
-  color: var(--color-purple);
+  color: var(--tide-tags);
 }
 
 .tide-planning {
-  color: var(--color-cyan);
+  color: var(--tide-planning);
 }
 
 /* the Padrão visual: the checkbox stands in for the bullet, as in a `- [ ]` line */
 .tide-checkbox-line .list-bullet {
   display: none;
+}
+
+/* each state's box in its theme color */
+.tide-checkbox[data-task=' '] {
+  --checkbox-border-color: var(--tide-todo);
+  --checkbox-border-color-hover: var(--tide-todo);
+}
+
+.tide-checkbox[data-task='/'] {
+  --checkbox-border-color: var(--tide-doing);
+  --checkbox-border-color-hover: var(--tide-doing);
+}
+
+.tide-checkbox[data-task='x'] {
+  --checkbox-color: var(--tide-done);
+  --checkbox-color-hover: var(--tide-done);
+}
+
+.tide-checkbox[data-task='-'] {
+  --checkbox-color: var(--tide-canceled);
+  --checkbox-color-hover: var(--tide-canceled);
 }
 
 /* DOING: a dash in the empty box */
@@ -97,11 +207,6 @@
 }
 
 /* CANCELED: an × instead of the check */
-.tide-checkbox[data-task='-']:checked {
-  background-color: var(--text-faint);
-  border-color: var(--text-faint);
-}
-
 .tide-checkbox[data-task='-']:checked::after {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 4l6 6m0-6l-6 6' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 4l6 6m0-6l-6 6' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");

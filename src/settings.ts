@@ -6,7 +6,11 @@ import type TidePlugin from './main'
 import type { PeriodSettings } from './periods'
 
 /** What the settings tab saves; the days come from the core Daily notes instead. */
-export type TideSettings = Omit<PlaceSettings, 'dayOf'> & PeriodSettings & { visual: Visual }
+export type TideSettings = Omit<PlaceSettings, 'dayOf'> & PeriodSettings & { visual: Visual; theme: Theme }
+
+/** The color themes; each has a light and a dark variant, picked by Obsidian's mode in styles.css. */
+export const THEMES = ['obsidian', 'doom-one', 'gruvbox', 'solarized', 'catppuccin'] as const
+export type Theme = (typeof THEMES)[number]
 
 export const DEFAULT_SETTINGS: TideSettings = {
   periodsFolder: '',
@@ -14,6 +18,7 @@ export const DEFAULT_SETTINGS: TideSettings = {
   listMarker: 'categories: [[lists]]',
   templatesFolder: 'templates',
   visual: 'org',
+  theme: 'obsidian',
 }
 
 export class TideSettingTab extends PluginSettingTab {
@@ -52,6 +57,18 @@ export class TideSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.visual)
           .onChange(async (value) => {
             this.plugin.settings.visual = value as Visual
+            await this.plugin.saveSettings()
+          }),
+      )
+    new Setting(this.containerEl)
+      .setName(t('settings.theme'))
+      .setDesc(t('settings.theme.desc'))
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions(Object.fromEntries(THEMES.map((theme) => [theme, t(`settings.theme.${theme}`)])))
+          .setValue(this.plugin.settings.theme)
+          .onChange(async (value) => {
+            this.plugin.settings.theme = value as Theme
             await this.plugin.saveSettings()
           }),
       )

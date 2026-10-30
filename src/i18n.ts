@@ -45,6 +45,13 @@ const ptBR = {
     'No Live Preview. Org: o texto colorido. Padrão: o checkbox do Obsidian, com os detalhes recolhidos num resumo.',
   'settings.visual.org': 'Org',
   'settings.visual.standard': 'Padrão',
+  'settings.theme': 'Tema de cor',
+  'settings.theme.desc': 'As cores dos estados no visual Org e nos checkboxes. Claro ou escuro segue o Obsidian.',
+  'settings.theme.obsidian': 'Padrão do Obsidian',
+  'settings.theme.doom-one': 'Doom One',
+  'settings.theme.gruvbox': 'Gruvbox',
+  'settings.theme.solarized': 'Solarized',
+  'settings.theme.catppuccin': 'Catppuccin',
   'settings.templatesFolder': 'Pasta de templates',
   'settings.templatesFolder.desc':
     'Onde ficam Week.md, Month.md e Year.md. O template do daily vem das configurações do Daily notes.',
