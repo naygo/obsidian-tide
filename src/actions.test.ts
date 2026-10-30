@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { orgAction, type Action, type Change } from './actions'
+import { enterAt, orgAction, summary, taskFolds, type Action, type Change } from './actions'
 
 const NOW = new Date(2026, 9, 30, 9, 5) // sex 2026-10-30 09:05
 
@@ -247,5 +247,79 @@ describe('orgAction repeater', () => {
     expect(run(doc, 0, 'nextState')).toBe(
       '- DONE x\n  DEADLINE: <2026-10-30 sex +1d>\n  CLOSED: [2026-10-30 sex 09:05]',
     )
+  })
+})
+
+describe('orgAction box', () => {
+  it('cycles the checkbox through the states, CANCELED back to TODO, never to a loose item', () => {
+    expect(run('- TODO x', 0, 'nextBox')).toBe('- DOING x')
+    expect(run('- CANCELED x\n  CLOSED: [2026-10-29 qui 15:02]', 0, 'nextBox')).toBe('- TODO x')
+  })
+})
+
+describe('enterAt', () => {
+  const task = [
+    '- TODO x',
+    '  SCHEDULED: <2026-10-30 sex>',
+    '  :PROPERTIES:',
+    '  :CATEGORY: pessoal',
+    '  :END:',
+    '  descrição',
+    '  - [ ] passo',
+    '  - sub',
+  ]
+
+  it('opens an indented line after the planning and drawers, or under a description line', () => {
+    expect(enterAt(task, 0)).toEqual({ after: 4, indent: '  ' })
+    expect(enterAt(task, 1)).toEqual({ after: 4, indent: '  ' })
+    expect(enterAt(task, 3)).toEqual({ after: 4, indent: '  ' })
+    expect(enterAt(task, 5)).toEqual({ after: 5, indent: '  ' })
+    expect(enterAt(['  - DOING x'], 0)).toEqual({ after: 0, indent: '    ' })
+  })
+
+  it('splits a description line, but never the head, planning or a drawer', () => {
+    expect(enterAt(task, 5, false)).toEqual({ after: 5, indent: '  ' })
+    expect(enterAt(task, 0, false)).toBeNull()
+    expect(enterAt(task, 4, false)).toBeNull()
+  })
+
+  it('leaves steps, bullets, loose items and other lines to the usual Enter', () => {
+    expect(enterAt(task, 6)).toBeNull()
+    expect(enterAt(task, 7)).toBeNull()
+    expect(enterAt(['- comprar pão', '  detalhe'], 0)).toBeNull()
+    expect(enterAt(['- comprar pão', '  detalhe'], 1)).toBeNull()
+    expect(enterAt(['texto'], 0)).toBeNull()
+    expect(enterAt(['- TODO x', ''], 1)).toBeNull()
+  })
+
+  it('belongs to the nearest task, even inside a loose item', () => {
+    expect(enterAt(['- nota', '  - TODO sub', '    detalhe'], 2)).toEqual({ after: 2, indent: '    ' })
+  })
+})
+
+describe('taskFolds', () => {
+  it('spans the lines under each task head, nested tasks included', () => {
+    const lines = ['- TODO a', '  detalhe', '  - TODO b', '    passo', '', '- TODO c', '- nota', '  texto']
+    expect(taskFolds(lines)).toEqual([
+      { head: 0, end: 3 },
+      { head: 2, end: 3 },
+    ])
+  })
+})
+
+describe('summary', () => {
+  it('shows the dates and the steps done', () => {
+    const block = [
+      '- TODO x',
+      '  SCHEDULED: <2026-10-30 sex 14:00 +1w>',
+      '  DEADLINE: <2026-10-31 sáb>',
+      '  - [x] um',
+      '  - [ ] dois',
+    ]
+    expect(summary(block)).toBe('2026-10-30 14:00 +1w · prazo 2026-10-31 · 1/2')
+  })
+
+  it('is empty when only text is under the head', () => {
+    expect(summary(['- TODO x', '  texto'])).toBe('')
   })
 })

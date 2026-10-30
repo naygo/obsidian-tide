@@ -1,17 +1,19 @@
 import { type App, Modal, Notice, normalizePath, PluginSettingTab, Setting } from 'obsidian'
+import type { Visual } from './editor'
 import { t } from './i18n'
 import { type PlaceSettings, parseMarker } from './ladder'
 import type TidePlugin from './main'
 import type { PeriodSettings } from './periods'
 
 /** What the settings tab saves; the days come from the core Daily notes instead. */
-export type TideSettings = Omit<PlaceSettings, 'dayOf'> & PeriodSettings
+export type TideSettings = Omit<PlaceSettings, 'dayOf'> & PeriodSettings & { visual: Visual }
 
 export const DEFAULT_SETTINGS: TideSettings = {
   periodsFolder: '',
   inbox: 'inbox.md',
   listMarker: 'categories: [[lists]]',
   templatesFolder: 'templates',
+  visual: 'org',
 }
 
 export class TideSettingTab extends PluginSettingTab {
@@ -41,6 +43,18 @@ export class TideSettingTab extends PluginSettingTab {
             }),
         )
     }
+    new Setting(this.containerEl)
+      .setName(t('settings.visual'))
+      .setDesc(t('settings.visual.desc'))
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions({ org: t('settings.visual.org'), standard: t('settings.visual.standard') })
+          .setValue(this.plugin.settings.visual)
+          .onChange(async (value) => {
+            this.plugin.settings.visual = value as Visual
+            await this.plugin.saveSettings()
+          }),
+      )
   }
 }
 

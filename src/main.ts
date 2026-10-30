@@ -1,4 +1,4 @@
-import { Prec, RangeSetBuilder } from '@codemirror/state'
+import { type Extension, Prec, RangeSetBuilder } from '@codemirror/state'
 import { Decoration, type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate, keymap } from '@codemirror/view'
 import {
   type App,
@@ -14,6 +14,7 @@ import {
   normalizePath,
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
+import { foldTasks, tideEditor } from './editor'
 import { type SuggestContext, type Suggestion, type Suggestions, orgSuggest } from './complete'
 import { type MessageKey, t } from './i18n'
 import {
@@ -34,7 +35,7 @@ import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, pe
 import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
 import { TaskIndex, TasksBlock, fileAt } from './tasks'
 
-const KEYS: [string, Action][] = [
+const KEYS: [string, Exclude<Action, 'nextBox'>][] = [
   ['Shift-ArrowRight', 'nextState'],
   ['Shift-ArrowLeft', 'prevState'],
   ['Shift-ArrowUp', 'priorityUp'],
@@ -236,6 +237,17 @@ export default class TidePlugin extends Plugin {
   private dailyDay = ''
   /** a second run would read the same files and append their blocks to the daily again */
   private migrating = false
+  /** Enter, Ctrl+Alt+Tab and the task visual; swapped in place when the visual changes */
+  private editor: Extension[] = []
+  private visual: TideSettings['visual'] | null = null
+
+  /** Builds the editor extensions for the visual in the settings, only when it changed: Padrão folds on each build. */
+  private applyVisual() {
+    if (this.visual === this.settings.visual) return
+    this.visual = this.settings.visual
+    this.editor.splice(0, this.editor.length, ...tideEditor(this.visual))
+    this.app.workspace.updateOptions()
+  }
 
   /** The settings the ladder needs, with the core Daily notes deciding which files are days. */
   private places(): PlaceSettings {
@@ -368,12 +380,15 @@ export default class TidePlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings)
     this.rebuild()
+    this.applyVisual()
   }
 
   async onload() {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<TideSettings> | null) }
     this.addSettingTab(new TideSettingTab(this.app, this))
     this.daily = await readDailyConfig(this.app)
+    this.applyVisual()
+    this.registerEditorExtension(this.editor)
 
     this.app.workspace.onLayoutReady(() => void this.index.rebuild())
     // 'changed' covers edits, new files and frontmatter; it hands over the content already read
@@ -475,6 +490,14 @@ export default class TidePlugin extends Plugin {
         ),
       ),
     )
+
+    // Ctrl+Alt+Tab from the command palette, for touch screens and desktops that keep the key for themselves
+    this.addCommand({
+      id: 'toggle-tasks',
+      name: t('command.toggleTasks'),
+      // ponytail: Editor.cm is Obsidian's EditorView, there at runtime but not in the API types
+      editorCallback: (editor) => void foldTasks((editor as unknown as { cm: EditorView }).cm, 'toggle'),
+    })
 
     // the same actions from the command palette, for touch screens without Shift+arrows
     for (const [, action] of KEYS) {

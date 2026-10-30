@@ -11,6 +11,7 @@ const ptBR = {
   'command.moveTo': 'Mover para…',
   'command.migrate': 'Migrar pendentes para hoje',
   'command.fix': 'Corrigir linha fora da regra',
+  'command.toggleTasks': 'Recolher ou expandir as tarefas',
   // the mark on a line off the rule, shown on hover
   'offRule.repeater': 'Repetição mora numa lista: Corrigir move para uma lista',
   'offRule.scheduled': 'No daily, o SCHEDULED só guarda a hora: Corrigir move para o dia da data',
@@ -18,6 +19,8 @@ const ptBR = {
   'pending.one': 'pendente',
   'pending.many': 'pendentes',
   'pending.migrate': 'migrar',
+  // the summary of a folded task in the Padrão visual: clicking it opens the details
+  'fold.open': 'Abrir detalhes',
   'move.placeholder': 'Hoje, uma lista ou uma data: 2026-11-03, 2026-W45, 2026-11, 2026',
   'move.placeholderList': 'Uma lista ou a Inbox',
   'move.today': 'Hoje',
@@ -37,6 +40,11 @@ const ptBR = {
   'settings.inbox.desc': 'Caminho da nota da Inbox, que fica no topo da escada como as listas.',
   'settings.listMarker': 'Marcador de lista',
   'settings.listMarker.desc': 'Propriedade e valor (como categories: [[lists]]) ou o nome de uma pasta.',
+  'settings.visual': 'Visual das tarefas',
+  'settings.visual.desc':
+    'No Live Preview. Org: o texto colorido. Padrão: o checkbox do Obsidian, com os detalhes recolhidos num resumo.',
+  'settings.visual.org': 'Org',
+  'settings.visual.standard': 'Padrão',
   'settings.templatesFolder': 'Pasta de templates',
   'settings.templatesFolder.desc':
     'Onde ficam Week.md, Month.md e Year.md. O template do daily vem das configurações do Daily notes.',

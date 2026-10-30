@@ -3,6 +3,7 @@ import {
   type OrgBlock,
   STATES,
   type State,
+  type Timestamp,
   formatTimestamp,
   parseBlock,
   parseHead,
@@ -12,7 +13,8 @@ import {
   stamp,
 } from './org'
 
-export type Action = 'nextState' | 'prevState' | 'priorityUp' | 'priorityDown'
+/** nextBox is a click on the Padrão checkbox: nextState without the loose item, so CANCELED wraps to TODO */
+export type Action = 'nextState' | 'prevState' | 'priorityUp' | 'priorityDown' | 'nextBox'
 
 /** Offsets into lines.join("\n"), all relative to the original document. */
 export interface Change {
@@ -22,6 +24,7 @@ export interface Change {
 }
 
 const RING: (State | null)[] = [null, ...STATES]
+const BOX: (State | null)[] = [...STATES]
 const CLOSED_STATES: (State | null)[] = ['DONE', 'CANCELED']
 // Org's default: from no cookie both directions start at B; past the ends, the cookie goes away.
 const PRIORITY_UP = { none: 'B', A: null, B: 'A', C: 'B' } as const
@@ -62,11 +65,12 @@ function transition(b: OrgBlock, action: Action, now: Date): OrgBlock | null {
     return { ...b, priority: table[b.priority ?? 'none'] }
   }
   if (!b.state && action === 'prevState') return null
-  const i = RING.indexOf(b.state)
-  const state = RING[(i + (action === 'nextState' ? 1 : RING.length - 1)) % RING.length]
+  const ring = action === 'nextBox' ? BOX : RING
+  const i = ring.indexOf(b.state)
+  const state = ring[(i + (action === 'prevState' ? ring.length - 1 : 1)) % ring.length]
   // completing a repeating task sends it back to TODO on its next date, without CLOSED;
   // stepping back from CANCELED is not a completion, so it lands on DONE like any task
-  if (state === 'DONE' && action === 'nextState' && b.scheduled?.repeater) {
+  if (state === 'DONE' && action !== 'prevState' && b.scheduled?.repeater) {
     return {
       ...b,
       state: 'TODO',
@@ -106,6 +110,42 @@ export function findBlock(lines: string[], cursor: number): { start: number; end
   while (end < lines.length && (!lines[end].trim() || indentOf(lines[end]) > ind)) end++
   while (end > head + 1 && !lines[end - 1].trim()) end--
   return { start: head, end }
+}
+
+/**
+ * Where Enter inside a task block opens an indented line: after `after`, with `indent`. On the head, planning or a
+ * drawer that is after the drawers, so the parser still reads them, and only from the end of the line: splitting them
+ * would break the task. Null leaves Enter as usual (steps and bullets go on as lists).
+ */
+export function enterAt(lines: string[], line: number, atEnd = true): { after: number; indent: string } | null {
+  const range = findBlock(lines, line)
+  if (!range || !parseHead(lines[range.start])?.state) return null
+  const block = parseBlock(lines.slice(range.start, range.end))!
+  const lastMeta = range.end - block.body.length - 1
+  if (line <= lastMeta) return atEnd ? { after: lastMeta, indent: block.childIndent } : null
+  return /^\s*- /.test(lines[line]) ? null : { after: line, indent: leadOf(lines[line]) }
+}
+
+/** Each task head with lines under it and the last of those lines: what Ctrl+Alt+Tab and the Padrão visual fold. */
+export function taskFolds(lines: string[]): { head: number; end: number }[] {
+  return lines.flatMap((l, head) => {
+    if (!parseHead(l)?.state) return []
+    const { start, end } = findBlock(lines, head)!
+    return end - start > 1 ? [{ head, end: end - 1 }] : []
+  })
+}
+
+const when = (ts: Timestamp) => [ts.date, ts.time, ts.repeater].filter(Boolean).join(' ')
+
+/** The folded details of a task in one line: SCHEDULED, DEADLINE and the steps done. */
+export function summary(lines: string[]): string {
+  const b = parseBlock(lines)!
+  const parts = [
+    b.scheduled && when(b.scheduled),
+    b.deadline && `${t('block.deadline')} ${when(b.deadline)}`,
+    b.steps.length && `${b.steps.filter((s) => s.checked).length}/${b.steps.length}`,
+  ].filter(Boolean)
+  return parts.join(' · ')
 }
 
 /** Line-level LCS diff, so untouched lines (and the cursor on them) stay put. */

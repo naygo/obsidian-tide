@@ -46,3 +46,76 @@
   text-decoration: underline wavy var(--text-warning);
   text-underline-offset: 3px;
 }
+
+/* the Org visual: the org words of a task in color */
+.tide-kw {
+  font-weight: var(--bold-weight);
+}
+
+.tide-kw-todo {
+  color: var(--color-red);
+}
+
+.tide-kw-doing {
+  color: var(--color-orange);
+}
+
+.tide-kw-done {
+  color: var(--color-green);
+}
+
+.tide-kw-canceled {
+  color: var(--text-faint);
+}
+
+.tide-pri {
+  color: var(--color-yellow);
+}
+
+.tide-tags {
+  color: var(--color-purple);
+}
+
+.tide-planning {
+  color: var(--color-cyan);
+}
+
+/* the Padrão visual: the checkbox stands in for the bullet, as in a `- [ ]` line */
+.tide-checkbox-line .list-bullet {
+  display: none;
+}
+
+/* DOING: a dash in the empty box */
+.tide-checkbox[data-task='/']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 50%;
+  height: 2px;
+  background-color: var(--checkbox-border-color);
+}
+
+/* CANCELED: an × instead of the check */
+.tide-checkbox[data-task='-']:checked {
+  background-color: var(--text-faint);
+  border-color: var(--text-faint);
+}
+
+.tide-checkbox[data-task='-']:checked::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 4l6 6m0-6l-6 6' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 4l6 6m0-6l-6 6' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* the summary of a folded task takes the place of the fold's own … */
+.tide-summarized .cm-foldPlaceholder {
+  display: none;
+}
+
+/* the folded details of a task: clicking opens them */
+.tide-summary {
+  margin-inline-start: var(--size-4-2);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
