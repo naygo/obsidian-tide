@@ -1,6 +1,7 @@
 export const STATES = ["TODO", "DOING", "DONE", "CANCELED"] as const;
 export type State = (typeof STATES)[number];
 export type Priority = "A" | "B" | "C";
+export type PlanningKey = "SCHEDULED" | "DEADLINE" | "CLOSED";
 
 export interface Timestamp {
   date: string;
@@ -28,6 +29,8 @@ export interface OrgBlock {
   scheduled: Timestamp | null;
   deadline: Timestamp | null;
   closed: Timestamp | null;
+  /** planning lines right under the head, in the order they were written */
+  planning: PlanningKey[];
   properties: [string, string][] | null;
   /** raw lines between :LOGBOOK: and :END: */
   logbook: string[] | null;
@@ -36,7 +39,7 @@ export interface OrgBlock {
   steps: Step[];
 }
 
-const HEAD = /^(\s*)- (?!\[[ xX-]\] )(?:(TODO|DOING|DONE|CANCELED)(?: |$))?(?:\[#([ABC])\](?: |$))?(.*)$/;
+const HEAD = new RegExp(String.raw`^(\s*)- (?!\[[ xX-]\] )(?:(${STATES.join("|")})(?: |$))?(?:\[#([ABC])\](?: |$))?(.*)$`);
 const TAGS = /^(.*?)(\s+):((?:[^\s:]+:)+)$/;
 const PLANNING = /^\s*(SCHEDULED|DEADLINE|CLOSED): ([<[])(\d{4}-\d{2}-\d{2})(?: ([^\s\d>\]+]+))?(?: (\d{1,2}:\d{2}))?(?: (\+\d+[dwmy]))?([>\]])$/;
 const PROPERTY = /^\s*:([^\s:]+):(?: (.*))?$/;
@@ -64,14 +67,17 @@ export function parseBlock(lines: string[]): OrgBlock | null {
   const rest = lines.slice(1);
   const childIndent = rest.find((l) => l.trim())?.match(/^\s*/)![0] ?? head.indent + "  ";
 
-  const planning: Partial<Record<"SCHEDULED" | "DEADLINE" | "CLOSED", Timestamp>> = {};
+  const planning: Partial<Record<PlanningKey, Timestamp>> = {};
+  const order: PlanningKey[] = [];
   let i = 0;
   for (; i < rest.length; i++) {
     const m = PLANNING.exec(rest[i]);
+    if (!m) break;
+    const key = m[1] as PlanningKey;
     // brackets must match the keyword: CLOSED is inactive [..], the others active <..>
-    if (!m || (m[1] === "CLOSED") !== (m[2] === "[") || planning[m[1] as "CLOSED"]) break;
-    if ((m[2] === "[") !== (m[7] === "]")) break;
-    planning[m[1] as "CLOSED"] = { date: m[3], weekday: m[4] ?? null, time: m[5] ?? null, repeater: m[6] ?? null };
+    if ((key === "CLOSED") !== (m[2] === "[") || (m[2] === "[") !== (m[7] === "]") || planning[key]) break;
+    planning[key] = { date: m[3], weekday: m[4] ?? null, time: m[5] ?? null, repeater: m[6] ?? null };
+    order.push(key);
   }
 
   let properties: [string, string][] | null = null;
@@ -99,6 +105,7 @@ export function parseBlock(lines: string[]): OrgBlock | null {
     scheduled,
     deadline: planning.DEADLINE ?? null,
     closed: planning.CLOSED ?? null,
+    planning: order,
     properties,
     logbook,
     body,
@@ -114,13 +121,21 @@ export function formatTimestamp(t: Timestamp, active: boolean): string {
   return active ? `<${inner}>` : `[${inner}]`;
 }
 
+export function serializeHead(b: OrgBlock): string {
+  const title = [b.state, b.priority && `[#${b.priority}]`, b.title].filter(Boolean).join(" ");
+  return b.indent + "- " + title + (b.tags.length ? `${b.tagsGap || " "}:${b.tags.join(":")}:` : "");
+}
+
+export function serializeClosed(b: OrgBlock): string {
+  return `${b.childIndent}CLOSED: ${formatTimestamp(b.closed!, false)}`;
+}
+
 export function serializeBlock(b: OrgBlock): string[] {
   const c = b.childIndent;
-  const title = [b.state, b.priority && `[#${b.priority}]`, b.title].filter(Boolean).join(" ");
-  const out = [b.indent + "- " + title + (b.tags.length ? `${b.tagsGap || " "}:${b.tags.join(":")}:` : "")];
+  const out = [serializeHead(b)];
   if (b.scheduled) out.push(`${c}SCHEDULED: ${formatTimestamp(b.scheduled, true)}`);
   if (b.deadline) out.push(`${c}DEADLINE: ${formatTimestamp(b.deadline, true)}`);
-  if (b.closed) out.push(`${c}CLOSED: ${formatTimestamp(b.closed, false)}`);
+  if (b.closed) out.push(serializeClosed(b));
   if (b.properties) {
     out.push(`${c}:PROPERTIES:`, ...b.properties.map(([k, v]) => `${c}:${k}:${v ? " " + v : ""}`), `${c}:END:`);
   }

@@ -86,3 +86,19 @@ describe("orgAction priority", () => {
     expect(run("- nota", 0, "priorityUp")).toBeNull();
   });
 });
+
+describe("orgAction leaves the rest of the block as written", () => {
+  it.each([
+    ["DEADLINE above SCHEDULED", ["- DOING x", "  DEADLINE: <2026-10-31 sáb>", "  SCHEDULED: <2026-10-30 sex>"]],
+    ["deeper drawer", ["- DOING x", "  SCHEDULED: <2026-10-30 sex>", "    :PROPERTIES:", "    :ABOUT: ", "    :END:"]],
+  ])("with %s", (_, lines) => {
+    const out = run(lines.join("\n"), 0, "nextState")!.split("\n");
+    expect(out[0]).toBe("- DONE x");
+    expect(out.filter((l) => !l.includes("CLOSED"))).toEqual(["- DONE x", ...lines.slice(1)]);
+  });
+
+  it("removes only the CLOSED line, wherever it sits among the planning lines", () => {
+    const doc = ["- DONE x", "  CLOSED: [2026-10-29 qui 15:02]", "  DEADLINE: <2026-10-31 sáb>"].join("\n");
+    expect(run(doc, 0, "prevState")).toBe("- DOING x\n  DEADLINE: <2026-10-31 sáb>");
+  });
+});

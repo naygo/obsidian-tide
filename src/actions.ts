@@ -1,4 +1,4 @@
-import { type OrgBlock, type Priority, type State, type Timestamp, parseBlock, parseHead, serializeBlock } from "./org";
+import { type OrgBlock, type Priority, STATES, type State, type Timestamp, parseBlock, parseHead, serializeClosed, serializeHead } from "./org";
 
 export type Action = "nextState" | "prevState" | "priorityUp" | "priorityDown";
 
@@ -9,7 +9,7 @@ export interface Change {
   insert: string;
 }
 
-const RING: (State | null)[] = [null, "TODO", "DOING", "DONE", "CANCELED"];
+const RING: (State | null)[] = [null, ...STATES];
 const CLOSED_STATES: (State | null)[] = ["DONE", "CANCELED"];
 // Org's default: from no cookie both directions start at B; past the ends, the cookie goes away.
 const PRIORITY_UP = { none: "B", A: null, B: "A", C: "B" } as const;
@@ -24,8 +24,13 @@ export function orgAction(lines: string[], cursorLine: number, action: Action, n
   const block = parseBlock(old)!;
   const next = transition(block, action, now);
   if (!next) return null;
+  // touch only the head and the CLOSED line; the rest stays exactly as written
+  const out = [serializeHead(next), ...old.slice(1)];
+  const closedAt = block.planning.indexOf("CLOSED") + 1;
+  if (next.closed && !closedAt) out.splice(block.planning.length + 1, 0, serializeClosed(next));
+  if (!next.closed && closedAt) out.splice(closedAt, 1);
   const base = lines.slice(0, range.start).reduce((n, l) => n + l.length + 1, 0);
-  return diffLines(old, serializeBlock(next)).map((c) => ({ ...c, from: c.from + base, to: c.to + base }));
+  return diffLines(old, out).map((c) => ({ ...c, from: c.from + base, to: c.to + base }));
 }
 
 function transition(b: OrgBlock, action: Action, now: Date): OrgBlock | null {

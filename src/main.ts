@@ -10,10 +10,14 @@ const KEYS: [string, Action, string][] = [
   ["Shift-ArrowDown", "priorityDown", "Diminuir prioridade da tarefa"],
 ];
 
+function changesAt(editor: Editor, action: Action) {
+  if (editor.somethingSelected()) return null;
+  return orgAction(editor.getValue().split("\n"), editor.getCursor().line, action, new Date());
+}
+
 /** Applies the action at the cursor; false lets the key keep its usual meaning (extend selection). */
 function runAction(editor: Editor, action: Action): boolean {
-  if (editor.somethingSelected()) return false;
-  const changes = orgAction(editor.getValue().split("\n"), editor.getCursor().line, action, new Date());
+  const changes = changesAt(editor, action);
   if (!changes) return false;
   editor.transaction({
     changes: changes.map((c) => ({ from: editor.offsetToPos(c.from), to: editor.offsetToPos(c.to), text: c.insert })),
@@ -43,7 +47,7 @@ export default class TidePlugin extends Plugin {
         id: action,
         name,
         editorCheckCallback: (checking, editor) => {
-          if (checking) return orgAction(editor.getValue().split("\n"), editor.getCursor().line, action, new Date()) !== null;
+          if (checking) return changesAt(editor, action) !== null;
           runAction(editor, action);
         },
       });
