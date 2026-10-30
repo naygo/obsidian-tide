@@ -11,3 +11,7 @@ Default vocabulary: needs-triage, needs-info, ready-for-agent, ready-for-human, 
 ### Domain docs
 
 Single-context: `GLOSSARY.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
+## Commits
+
+Conventional Commits, enforced by commitlint via husky (`commit-msg`). Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
