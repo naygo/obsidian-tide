@@ -139,12 +139,13 @@ export function ended(place: Place, today: string): boolean {
   return place.kind !== 'list' && firstDay(place) < today && !holds(place, today)
 }
 
-/** Head lines of the TODO and DOING without SCHEDULED; one inside another travels with it, so only the outer counts. */
+/** Head lines of the TODO and DOING without SCHEDULED at the top; a task inside another stays with its parent. */
 export function openUndated(lines: string[]): number[] {
   let end = 0
   return tasksIn(lines).flatMap(({ line, block }) => {
-    if (line < end || block.scheduled || (block.state !== 'TODO' && block.state !== 'DOING')) return []
+    if (line < end) return []
     end = findBlock(lines, line)!.end
+    if (block.scheduled || (block.state !== 'TODO' && block.state !== 'DOING')) return []
     return [line]
   })
 }

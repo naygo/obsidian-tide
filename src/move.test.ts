@@ -119,11 +119,11 @@ describe('pendingIn', () => {
     '  - TODO filho, vai junto com o pai',
     '- TODO agendada',
     '  SCHEDULED: <2026-10-20 ter>',
-    '  - TODO filho de agendada',
+    '  - TODO filho de agendada, fica com ela',
     '- DONE feita',
     '- nota solta',
   ]
-  const pending = [0, 2, 6]
+  const pending = [0, 2]
 
   it('takes TODO and DOING without SCHEDULED from a period that is over', () => {
     expect(pendingIn(lines, day('2026-10-29'), TODAY)).toEqual(pending)
@@ -153,11 +153,8 @@ describe('migrate', () => {
     })
   })
 
-  it('moves a nested pending task out to the top level', () => {
-    expect(migrate(['- DONE pai', '  - TODO filho'], day('2026-10-29'), TODAY)).toEqual({
-      source: ['- DONE pai'],
-      moved: ['- TODO filho'],
-    })
+  it('leaves a task inside another with its parent', () => {
+    expect(migrate(['- DONE pai', '  - TODO filho'], day('2026-10-29'), TODAY)).toBeNull()
   })
 
   it('is null when nothing is pending', () => {
