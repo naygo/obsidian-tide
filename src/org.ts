@@ -1,3 +1,5 @@
+import { type MessageKey, t } from './i18n'
+
 export const STATES = ['TODO', 'DOING', 'DONE', 'CANCELED'] as const
 export type State = (typeof STATES)[number]
 export type Priority = 'A' | 'B' | 'C'
@@ -5,7 +7,6 @@ export type PlanningKey = 'SCHEDULED' | 'DEADLINE' | 'CLOSED'
 
 export interface Timestamp {
   date: string
-  weekday: string | null
   time: string | null
   repeater: string | null
 }
@@ -79,7 +80,7 @@ export function parseBlock(lines: string[]): OrgBlock | null {
     const key = m[1] as PlanningKey
     // brackets must match the keyword: CLOSED is inactive [..], the others active <..>
     if ((key === 'CLOSED') !== (m[2] === '[') || (m[2] === '[') !== (m[7] === ']') || planning[key]) break
-    planning[key] = { date: m[3], weekday: m[4] ?? null, time: m[5] ?? null, repeater: m[6] ?? null }
+    planning[key] = { date: m[3], time: m[5] ?? null, repeater: m[6] ?? null }
     order.push(key)
   }
 
@@ -119,8 +120,11 @@ export function parseBlock(lines: string[]): OrgBlock | null {
   }
 }
 
-export function formatTimestamp(t: Timestamp, active: boolean): string {
-  const inner = [t.date, t.weekday, t.time, t.repeater].filter(Boolean).join(' ')
+/** The weekday is decorative: the parser skips it and it is written from the date, in the UI language. */
+export function formatTimestamp(ts: Timestamp, active: boolean): string {
+  const [y, m, d] = ts.date.split('-').map(Number)
+  const weekday = t(`weekday.${new Date(y, m - 1, d).getDay()}` as MessageKey)
+  const inner = [ts.date, weekday, ts.time, ts.repeater].filter(Boolean).join(' ')
   return active ? `<${inner}>` : `[${inner}]`
 }
 

@@ -2,12 +2,13 @@ import { Prec } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
 import { type Editor, Plugin, editorInfoField } from 'obsidian'
 import { type Action, orgAction } from './actions'
+import { t } from './i18n'
 
-const KEYS: [string, Action, string][] = [
-  ['Shift-ArrowRight', 'nextState', 'Avançar estado da tarefa'],
-  ['Shift-ArrowLeft', 'prevState', 'Voltar estado da tarefa'],
-  ['Shift-ArrowUp', 'priorityUp', 'Aumentar prioridade da tarefa'],
-  ['Shift-ArrowDown', 'priorityDown', 'Diminuir prioridade da tarefa'],
+const KEYS: [string, Action][] = [
+  ['Shift-ArrowRight', 'nextState'],
+  ['Shift-ArrowLeft', 'prevState'],
+  ['Shift-ArrowUp', 'priorityUp'],
+  ['Shift-ArrowDown', 'priorityDown'],
 ]
 
 function changesAt(editor: Editor, action: Action) {
@@ -42,10 +43,10 @@ export default class TidePlugin extends Plugin {
     )
 
     // the same actions from the command palette, for touch screens without Shift+arrows
-    for (const [, action, name] of KEYS) {
+    for (const [, action] of KEYS) {
       this.addCommand({
         id: action,
-        name,
+        name: t(`command.${action}`),
         editorCheckCallback: (checking, editor) => {
           if (checking) return changesAt(editor, action) !== null
           runAction(editor, action)

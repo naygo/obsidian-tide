@@ -24,7 +24,6 @@ const CLOSED_STATES: (State | null)[] = ['DONE', 'CANCELED']
 // Org's default: from no cookie both directions start at B; past the ends, the cookie goes away.
 const PRIORITY_UP = { none: 'B', A: null, B: 'A', C: 'B' } as const
 const PRIORITY_DOWN = { none: 'B', A: 'B', B: 'C', C: null } as const
-const WEEKDAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 
 /** Edits for an org key press with the cursor on `cursorLine`, or null when it doesn't apply. */
 export function orgAction(lines: string[], cursorLine: number, action: Action, now: Date): Change[] | null {
@@ -61,7 +60,6 @@ function stamp(d: Date): Timestamp {
   const p = (n: number) => String(n).padStart(2, '0')
   return {
     date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-    weekday: WEEKDAYS[d.getDay()],
     time: `${p(d.getHours())}:${p(d.getMinutes())}`,
     repeater: null,
   }

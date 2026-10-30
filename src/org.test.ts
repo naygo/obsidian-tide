@@ -26,9 +26,9 @@ describe('parseBlock', () => {
     expect(b.priority).toBe('A')
     expect(b.title).toBe('dentista')
     expect(b.tags).toEqual(['saude', 'casa'])
-    expect(b.scheduled).toEqual({ date: '2026-10-30', weekday: 'sex', time: '14:00', repeater: '+1w' })
-    expect(b.deadline).toEqual({ date: '2026-10-31', weekday: 'sáb', time: null, repeater: null })
-    expect(b.closed).toEqual({ date: '2026-10-29', weekday: 'qui', time: '15:02', repeater: null })
+    expect(b.scheduled).toEqual({ date: '2026-10-30', time: '14:00', repeater: '+1w' })
+    expect(b.deadline).toEqual({ date: '2026-10-31', time: null, repeater: null })
+    expect(b.closed).toEqual({ date: '2026-10-29', time: '15:02', repeater: null })
     expect(b.properties).toEqual([
       ['CREATED', '[2026-10-29 qui 10:00]'],
       ['CATEGORY', 'pessoal'],
@@ -76,5 +76,19 @@ describe('parseBlock variations', () => {
     expect(parseBlock(['- [ ] passo'])).toBeNull()
     expect(parseBlock(['- TODOS os dias'])!.state).toBeNull()
     expect(parseBlock(['texto'])).toBeNull()
+  })
+})
+
+describe('weekday inside < >', () => {
+  it('is decorative: any abbreviation, or none, parses the same', () => {
+    const at = (ts: string) => parseBlock(['- TODO x', `  SCHEDULED: ${ts}`])!.scheduled
+    expect(at('<2026-10-30 Fri 14:00>')).toEqual(at('<2026-10-30 sex 14:00>'))
+    expect(at('<2026-10-30 14:00>')).toEqual(at('<2026-10-30 sex 14:00>'))
+    expect(at('<2026-10-30 qua 14:00>')).toEqual(at('<2026-10-30 sex 14:00>'))
+  })
+
+  it('is written from the date in the UI language', () => {
+    const lines = ['- TODO x', '  DEADLINE: <2026-10-31 Sat>']
+    expect(serializeBlock(parseBlock(lines)!)).toEqual(['- TODO x', '  DEADLINE: <2026-10-31 sáb>'])
   })
 })
