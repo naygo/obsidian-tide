@@ -1,0 +1,9 @@
+{
+  "id": "tide",
+  "name": "Tide",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Bullet journal em linhas org, hábitos e agenda.",
+  "author": "Nayla Gomes",
+  "isDesktopOnly": false
+}
