@@ -4,6 +4,17 @@ const ptBR = {
   'command.prevState': 'Voltar estado da tarefa',
   'command.priorityUp': 'Aumentar prioridade da tarefa',
   'command.priorityDown': 'Diminuir prioridade da tarefa',
+  'command.newList': 'Nova lista',
+  'newList.name': 'Nome',
+  'newList.create': 'Criar',
+  'newList.exists': 'Já existe uma nota com esse nome.',
+  'newList.invalid': 'Não foi possível criar a nota com esse nome.',
+  'settings.periodsFolder': 'Pasta dos períodos',
+  'settings.periodsFolder.desc': 'Onde ficam os arquivos de semana, mês e ano. Vazio é a raiz do vault.',
+  'settings.inbox': 'Arquivo da Inbox',
+  'settings.inbox.desc': 'Caminho da nota da Inbox, que fica no topo da escada como as listas.',
+  'settings.listMarker': 'Marcador de lista',
+  'settings.listMarker.desc': 'Propriedade e valor (como categories: [[lists]]) ou o nome de uma pasta.',
   // written into the :LOGBOOK: entry of a repeating task, before the occurrence date
   'logbook.occurrence': 'ocorrência de',
   // weekday abbreviations written inside org dates, Sunday first

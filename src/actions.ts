@@ -95,7 +95,7 @@ const indentOf = (l: string) => leadOf(l).length
  * The task block around the cursor: the nearest enclosing list item with a keyword,
  * else the outermost enclosing plain list item (a loose item). Steps never own a block.
  */
-function findBlock(lines: string[], cursor: number): { start: number; end: number } | null {
+export function findBlock(lines: string[], cursor: number): { start: number; end: number } | null {
   if (!lines[cursor]?.trim()) return null
   let head = -1
   let limit = Infinity

@@ -1,0 +1,32 @@
+/* an empty tide-tasks block takes no space, in reading view and in live preview */
+.el-pre:has(> .block-language-tide-tasks:empty),
+.cm-embed-block:has(> .block-language-tide-tasks:empty) {
+  display: none;
+}
+
+.tide-tasks {
+  list-style: none;
+  padding-inline-start: 0;
+}
+
+.tide-task {
+  display: flex;
+  gap: var(--size-4-2);
+  align-items: baseline;
+}
+
+.tide-state {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+}
+
+.tide-state-done,
+.tide-state-canceled {
+  color: var(--text-muted);
+}
+
+.tide-date,
+.tide-source {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
