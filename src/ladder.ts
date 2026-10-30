@@ -63,6 +63,18 @@ export function isoWeek(date: string): { week: string; thursday: string } {
   return { week: `${year}-W${String(n).padStart(2, '0')}`, thursday: t.toISOString().slice(0, 10) }
 }
 
+/** The first day of a day, week (its Monday), month or year; a list has none. */
+export function firstDay({ kind, key }: Place): string {
+  if (kind === 'month') return `${key}-01`
+  if (kind === 'year') return `${key}-01-01`
+  if (kind !== 'week') return key
+  // January 4th is always in week 1
+  const year = Number(key.slice(0, 4))
+  const jan4 = new Date(Date.UTC(year, 0, 4)).getUTCDay()
+  const monday = 4 - ((jan4 + 6) % 7) + (Number(key.slice(6)) - 1) * 7
+  return new Date(Date.UTC(year, 0, monday)).toISOString().slice(0, 10)
+}
+
 /** Whether the date falls in the place: its day, ISO week, calendar month or year. A list holds every date. */
 export function holds(place: Place, date: string): boolean {
   const key = {

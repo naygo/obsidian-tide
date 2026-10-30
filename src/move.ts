@@ -1,27 +1,16 @@
-import { findBlock } from './actions'
-import { type Place, holds } from './ladder'
-import { formatTimestamp, parseBlock } from './org'
-
-const leadOf = (l: string) => l.match(/^\s*/)![0]
-
-/** The first day of a day, week (its Monday), month or year key. */
-function firstDay({ kind, key }: Place): string {
-  if (kind === 'month') return `${key}-01`
-  if (kind === 'year') return `${key}-01-01`
-  if (kind !== 'week') return key
-  // January 4th is always in week 1
-  const jan4 = new Date(Date.UTC(Number(key.slice(0, 4)), 0, 4))
-  const monday = 4 - ((jan4.getUTCDay() + 6) % 7) + (Number(key.slice(6)) - 1) * 7
-  return new Date(Date.UTC(jan4.getUTCFullYear(), 0, monday)).toISOString().slice(0, 10)
-}
+import { findBlock, leadOf } from './actions'
+import { type Place, firstDay, holds } from './ladder'
+import { type Timestamp, formatTimestamp, parseBlock } from './org'
 
 /**
- * Move to… (org's refile) on the block around `cursor`: the block leaves `source` and goes in `moved`,
- * dedented to the top level, for the caller to append at the destination.
+ * Move to… (org's refile) on the block around `cursor`, which lives at `home`. The block leaves `source` and goes
+ * in `moved`, dedented to the top level, for the caller to append at the destination; `moved` is null when the
+ * block stays where it is: already at `dest`, or a repeating task of a list postponed to a period.
  */
 export function moveBlock(
   lines: string[],
   cursor: number,
+  home: Place | null,
   dest: Place,
   today: string,
 ): { source: string[]; moved: string[] | null } | null {
@@ -31,28 +20,28 @@ export function moveBlock(
   const block = parseBlock(old)!
   const out = [...old]
   const s = block.scheduled
-  const at = block.planning.indexOf('SCHEDULED') + 1
-  // a repeater lives in its list: a period postpones it there, only another list takes it away
-  const postpone = !!s?.repeater && dest.kind !== 'list'
-  const date = !s
-    ? null
-    : dest.kind === 'day'
-      ? dest.key
-      : holds(dest, s.date)
-        ? s.date
-        : postpone
-          ? holds(dest, today)
-            ? today
-            : firstDay(dest)
-          : null
+  const date = s && scheduledAt(s, dest, today)
   if (s && date !== s.date) {
+    const at = block.planning.indexOf('SCHEDULED') + 1
     if (date) out[at] = `${leadOf(old[at])}SCHEDULED: ${formatTimestamp({ ...s, date }, true)}`
     else out.splice(at, 1)
   }
-  if (postpone) return { source: [...lines.slice(0, range.start), ...out, ...lines.slice(range.end)], moved: null }
+  // a repeater lives in its list: a period postpones it there, only another list takes it away
+  const stays =
+    (home?.kind === dest.kind && home.key === dest.key) ||
+    (!!s?.repeater && home?.kind === 'list' && dest.kind !== 'list')
+  if (stays) return { source: [...lines.slice(0, range.start), ...out, ...lines.slice(range.end)], moved: null }
   const cut = block.indent.length
   return {
     source: [...lines.slice(0, range.start), ...lines.slice(range.end)],
     moved: out.map((l) => l.slice(Math.min(cut, leadOf(l).length))),
   }
+}
+
+/** The SCHEDULED date at `dest`, or null to drop it. A repeater is never dropped, or the repetition would end. */
+function scheduledAt(s: Timestamp, dest: Place, today: string): string | null {
+  if (dest.kind === 'day') return dest.key
+  if (holds(dest, s.date)) return s.date
+  if (!s.repeater) return null
+  return holds(dest, today) ? today : firstDay(dest)
 }

@@ -4,6 +4,7 @@ import { moveBlock } from './move'
 
 const TODAY = '2026-10-30'
 const day = (key: string): Place => ({ kind: 'day', key })
+const LIST: Place = { kind: 'list', key: 'tide.md' }
 
 describe('moveBlock', () => {
   it('cuts the whole block and moves SCHEDULED to the day, with the same time', () => {
@@ -22,7 +23,7 @@ describe('moveBlock', () => {
       '  - [ ] passo',
       '- depois',
     ]
-    expect(moveBlock(lines, 8, day('2026-11-02'), TODAY)).toEqual({
+    expect(moveBlock(lines, 8, LIST, day('2026-11-02'), TODAY)).toEqual({
       source: ['- antes', '- depois'],
       moved: [
         '- TODO [#A] dentista :saude:',
@@ -34,7 +35,7 @@ describe('moveBlock', () => {
   })
 
   const task = ['- TODO x', '  SCHEDULED: <2026-11-02 seg 14:00>', '  DEADLINE: <2026-12-20 dom>']
-  const kept = (dest: Place) => moveBlock(task, 0, dest, TODAY)?.moved
+  const kept = (dest: Place) => moveBlock(task, 0, day('2026-11-01'), dest, TODAY)?.moved
   const dropped = ['- TODO x', '  DEADLINE: <2026-12-20 dom>']
 
   it('keeps SCHEDULED when the week, month or year holds it, and drops it with the time when not', () => {
@@ -52,7 +53,7 @@ describe('moveBlock', () => {
 
   describe('a repeating task', () => {
     const repeating = ['- a', '- TODO x', '  SCHEDULED: <2026-10-28 qua 08:00 +1w>', '  :LOGBOOK:', '  :END:', '- b']
-    const postponed = (dest: Place) => moveBlock(repeating, 1, dest, TODAY)
+    const postponed = (dest: Place) => moveBlock(repeating, 1, LIST, dest, TODAY)
     const at = (ts: string) => ({
       source: repeating.map((l, i) => (i === 2 ? `  SCHEDULED: <${ts} 08:00 +1w>` : l)),
       moved: null,
@@ -78,15 +79,32 @@ describe('moveBlock', () => {
       expect(postponed({ kind: 'year', key: '2026' })).toEqual(at('2026-10-28 qua'))
       expect(postponed({ kind: 'year', key: '2027' })).toEqual(at('2027-01-01 sex'))
       const late = repeating.map((l) => l.replace('2026-10-28 qua', '2026-09-01 ter'))
-      expect(moveBlock(late, 1, { kind: 'month', key: '2026-10' }, TODAY)!.source[2]).toBe(
+      expect(moveBlock(late, 1, LIST, { kind: 'month', key: '2026-10' }, TODAY)!.source[2]).toBe(
         '  SCHEDULED: <2026-10-30 sex 08:00 +1w>',
       )
     })
   })
 
+  it('stays where it is, with the rules applied, when it already lives at the destination', () => {
+    const lines = ['- TODO x', '  SCHEDULED: <2026-12-02 qua>', '- y']
+    expect(moveBlock(lines, 0, LIST, LIST, TODAY)).toEqual({ source: lines, moved: null })
+    expect(moveBlock(lines, 0, { kind: 'month', key: '2026-11' }, { kind: 'month', key: '2026-11' }, TODAY)).toEqual({
+      source: ['- TODO x', '- y'],
+      moved: null,
+    })
+  })
+
+  it('moves a repeating task that lives outside a list instead of postponing it', () => {
+    const lines = ['- TODO x', '  SCHEDULED: <2026-10-28 qua +1w>']
+    expect(moveBlock(lines, 0, day('2026-10-28'), { kind: 'week', key: '2026-W45' }, TODAY)).toEqual({
+      source: [],
+      moved: ['- TODO x', '  SCHEDULED: <2026-11-02 seg +1w>'],
+    })
+  })
+
   it('takes a nested task out to the top level', () => {
     const lines = ['- projeto', '  - TODO x', '    - [ ] passo', '  - TODO y']
-    expect(moveBlock(lines, 2, { kind: 'list', key: 'inbox.md' }, TODAY)).toEqual({
+    expect(moveBlock(lines, 2, LIST, { kind: 'list', key: 'inbox.md' }, TODAY)).toEqual({
       source: ['- projeto', '  - TODO y'],
       moved: ['- TODO x', '  - [ ] passo'],
     })

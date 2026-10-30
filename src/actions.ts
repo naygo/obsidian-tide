@@ -88,7 +88,7 @@ function stamp(d: Date): Timestamp {
   }
 }
 
-const leadOf = (l: string) => l.match(/^\s*/)![0]
+export const leadOf = (l: string) => l.match(/^\s*/)![0]
 const indentOf = (l: string) => leadOf(l).length
 
 /**

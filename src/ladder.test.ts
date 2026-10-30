@@ -104,6 +104,7 @@ describe('showsAt', () => {
     expect(showsAt(year('2026'), '2027-01-01', week('2026-W53'))).toBe(true)
     expect(showsAt(year('2026'), '2027-01-01', day('2027-01-01'))).toBe(true)
     expect(showsAt(year('2026'), '2027-01-01', month('2027-01'))).toBe(false)
+    expect(showsAt(year('2026'), '2026-11-02', month('2026-11'))).toBe(true)
   })
 
   it('shows a week task only in its days', () => {

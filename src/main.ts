@@ -13,7 +13,7 @@ import {
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { type MessageKey, t } from './i18n'
-import { type Place, type PlaceSettings, isoWeek, periodOf, placeOf } from './ladder'
+import { type Place, type PlaceSettings, firstDay, holds, isoWeek, periodOf, placeOf } from './ladder'
 import { moveBlock } from './move'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
@@ -64,6 +64,16 @@ async function createIfMissing(app: App, spec: NoteSpec): Promise<TFile | null> 
   return app.vault.create(note.path, content).catch(() => fileAt(app, note.path))
 }
 
+/** A day, week, month or year key typed in the picker, or null when it names no real date. */
+function typedPlace(key: string): Place | null {
+  const kind = moment(key, 'YYYY-MM-DD', true).isValid() ? 'day' : periodOf(`${key}.md`, '')?.kind
+  if (!kind || kind === 'list') return null
+  const place = { kind, key }
+  // the period patterns take any two digits, so 2026-13 or 2026-W54 must come back from their first day
+  const first = firstDay(place)
+  return moment(first, 'YYYY-MM-DD', true).isValid() && holds(place, first) ? place : null
+}
+
 interface MoveTarget {
   label: string
   place: Place
@@ -82,8 +92,8 @@ class MoveModal extends FuzzySuggestModal<MoveTarget> {
 
   getItems() {
     const key = this.inputEl.value.trim()
-    const kind = moment(key, 'YYYY-MM-DD', true).isValid() ? 'day' : periodOf(`${key}.md`, '')?.kind
-    return kind ? [{ label: key, place: { kind, key } }, ...this.targets] : this.targets
+    const place = typedPlace(key)
+    return place ? [{ label: key, place }, ...this.targets] : this.targets
   }
 
   getItemText(target: MoveTarget) {
@@ -173,20 +183,24 @@ export default class TidePlugin extends Plugin {
 
   /** Move to… on the block at the cursor: write it at the destination first, then cut it, so a failure duplicates instead of losing it. */
   private async moveTo(editor: Editor, from: TFile, cursor: number, dest: Place) {
-    const file =
-      dest.kind === 'day'
-        ? await this.day(dest.key)
-        : dest.kind === 'list'
-          ? await createIfMissing(this.app, { path: dest.key, template: null, fallback: '' })
-          : await this.period(dest.key)
-    if (!file) return
     const lines = editor.getValue().split('\n')
-    const result = moveBlock(lines, cursor, dest, today())
+    const home = placeOf(from.path, this.app.metadataCache.getFileCache(from)?.frontmatter ?? null, this.places())
+    const result = moveBlock(lines, cursor, home, dest, today())
     if (!result) return
-    let source = result.source
-    if (result.moved && file.path === from.path) source = appendBlock(source.join('\n'), result.moved).split('\n')
-    else if (result.moved) await this.app.vault.process(file, (data) => appendBlock(data, result.moved!))
-    applyChanges(editor, diffLines(lines, source))
+    // only a block that leaves needs the destination, so a postpone never creates a note
+    if (result.moved) {
+      const file =
+        dest.kind === 'day'
+          ? await this.day(dest.key)
+          : dest.kind === 'list'
+            ? await createIfMissing(this.app, { path: dest.key, template: null, fallback: '' })
+            : await this.period(dest.key)
+      if (!file) return
+      await this.app.vault.process(file, (data) => appendBlock(data, result.moved!))
+      // edited meanwhile: the cut would land on the wrong lines, so the block stays in both places
+      if (editor.getValue() !== lines.join('\n')) return
+    }
+    applyChanges(editor, diffLines(lines, result.source))
   }
 
   /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
