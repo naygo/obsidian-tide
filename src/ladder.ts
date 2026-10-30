@@ -10,6 +10,8 @@ export interface PlaceSettings {
   inbox: string
   /** `property: value` marks lists by frontmatter; anything else is a folder holding the lists */
   listMarker: string
+  /** the YYYY-MM-DD date of a daily note's path, or null; the core Daily notes folder and format decide */
+  dayOf(path: string): string | null
 }
 
 const PERIODS: [Place['kind'], RegExp][] = [
@@ -19,15 +21,20 @@ const PERIODS: [Place['kind'], RegExp][] = [
 ]
 
 export function placeOf(path: string, frontmatter: Record<string, unknown> | null, s: PlaceSettings): Place | null {
-  const daily = /^daily\/(\d{4}-\d{2}-\d{2})\.md$/.exec(path)
-  if (daily) return { kind: 'day', key: daily[1] }
-  const prefix = s.periodsFolder ? s.periodsFolder.replace(/\/+$/, '') + '/' : ''
-  if (path.startsWith(prefix) && path.endsWith('.md')) {
-    const name = path.slice(prefix.length, -3)
-    const period = PERIODS.find(([, re]) => re.test(name))
-    if (period) return { kind: period[0], key: name }
-  }
+  const day = s.dayOf(path)
+  if (day) return { kind: 'day', key: day }
+  const period = periodOf(path, s.periodsFolder)
+  if (period) return period
   return path === s.inbox || isList(path, frontmatter, s.listMarker) ? { kind: 'list', key: path } : null
+}
+
+/** The week, month or year file at `path`, looked for in the periods folder. */
+export function periodOf(path: string, periodsFolder: string): Place | null {
+  const prefix = periodsFolder ? periodsFolder.replace(/\/+$/, '') + '/' : ''
+  if (!path.startsWith(prefix) || !path.endsWith('.md')) return null
+  const name = path.slice(prefix.length, -3)
+  const period = PERIODS.find(([, re]) => re.test(name))
+  return period ? { kind: period[0], key: name } : null
 }
 
 /** `property: value` or a folder path. */

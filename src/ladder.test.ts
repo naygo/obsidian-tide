@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { type Place, type PlaceSettings, isoWeek, placeOf, showsAt, taskDates, tasksIn } from './ladder'
 import { parseBlock } from './org'
 
-const SETTINGS: PlaceSettings = { periodsFolder: '', inbox: 'inbox.md', listMarker: 'categories: [[lists]]' }
+const SETTINGS: PlaceSettings = {
+  periodsFolder: '',
+  inbox: 'inbox.md',
+  listMarker: 'categories: [[lists]]',
+  dayOf: (path) => /^daily\/(\d{4}-\d{2}-\d{2})\.md$/.exec(path)?.[1] ?? null,
+}
 const LIST: Place = { kind: 'list', key: 'tide.md' }
 const day = (key: string): Place => ({ kind: 'day', key })
 const week = (key: string): Place => ({ kind: 'week', key })
@@ -17,6 +22,12 @@ describe('placeOf', () => {
     expect(placeOf('2026.md', null, SETTINGS)).toEqual(year('2026'))
     expect(placeOf('notas/2026.md', null, SETTINGS)).toBeNull()
     expect(placeOf('2026-10-30.md', null, SETTINGS)).toBeNull()
+  })
+
+  it('asks dayOf which files are days, so the core Daily notes folder and format decide', () => {
+    const s = { ...SETTINGS, dayOf: (path: string) => (path === 'diario/30-10-2026.md' ? '2026-10-30' : null) }
+    expect(placeOf('diario/30-10-2026.md', null, s)).toEqual(day('2026-10-30'))
+    expect(placeOf('daily/2026-10-30.md', null, s)).toBeNull()
   })
 
   it('looks for weeks, months and years in the periods folder', () => {

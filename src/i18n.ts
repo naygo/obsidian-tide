@@ -22,7 +22,7 @@ const ptBR = {
   'settings.listMarker.desc': 'Propriedade e valor (como categories: [[lists]]) ou o nome de uma pasta.',
   'settings.templatesFolder': 'Pasta de templates',
   'settings.templatesFolder.desc':
-    'Onde ficam Semana.md, Mês.md e Ano.md. O template do daily vem das configurações do Daily notes.',
+    'Onde ficam Week.md, Month.md e Year.md. O template do daily vem das configurações do Daily notes.',
   // written into the :LOGBOOK: entry of a repeating task, before the occurrence date
   'logbook.occurrence': 'ocorrência de',
   // weekday abbreviations written inside org dates, Sunday first

@@ -3,8 +3,8 @@ import { keymap } from '@codemirror/view'
 import { type App, type Editor, Plugin, TFile, debounce, editorInfoField, moment, normalizePath } from 'obsidian'
 import { type Action, orgAction } from './actions'
 import { type MessageKey, t } from './i18n'
-import { isoWeek, placeOf } from './ladder'
-import { type DailyConfig, type NoteSpec, dailyNote, periodNote } from './periods'
+import { type PlaceSettings, isoWeek, placeOf } from './ladder'
+import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, type TideSettings, TideSettingTab } from './settings'
 import { TaskIndex, TasksBlock, fileAt } from './tasks'
 
@@ -32,6 +32,13 @@ async function readDailyConfig(app: App): Promise<DailyConfig> {
   }
 }
 
+/** The YYYY-MM-DD date of a daily note, its name read back through the core's format; null for any other file. */
+function dayOf(config: DailyConfig, path: string): string | null {
+  const name = dailyName(config, path)
+  const day = name === null ? null : moment(name, config.format || DAILY_FORMAT, true)
+  return day?.isValid() ? day.format('YYYY-MM-DD') : null
+}
+
 /** Creates the note from its template only when nothing is at its path. Never writes over an existing file. */
 async function createIfMissing(app: App, spec: NoteSpec): Promise<TFile | null> {
   const note = { ...spec, path: normalizePath(spec.path), template: spec.template && normalizePath(spec.template) }
@@ -39,7 +46,7 @@ async function createIfMissing(app: App, spec: NoteSpec): Promise<TFile | null> 
   if (app.vault.getAbstractFileByPath(note.path) || (await app.vault.adapter.exists(note.path)))
     return fileAt(app, note.path)
   const template = note.template ? fileAt(app, note.template) : null
-  const content = template ? await app.vault.read(template) : note.fallback
+  const content = template ? (note.fill ?? String)(await app.vault.read(template)) : note.fallback
   const folder = note.path.slice(0, note.path.lastIndexOf('/'))
   if (folder && !app.vault.getAbstractFileByPath(folder)) await app.vault.createFolder(folder).catch(() => {})
   // vault.create refuses a path that already exists, so a race ends here instead of in an overwrite
@@ -63,16 +70,32 @@ function runAction(editor: Editor, action: Action): boolean {
 
 export default class TidePlugin extends Plugin {
   settings: TideSettings = DEFAULT_SETTINGS
-  private index = new TaskIndex(this.app, () => this.settings)
+  /** the core Daily notes settings, read again whenever the daily is checked */
+  private daily: DailyConfig = {}
+  private index = new TaskIndex(this.app, () => this.places())
   private rebuild = debounce(() => void this.index.rebuild(), 500, true)
   /** the day the daily was last created for, to notice midnight */
   private dailyDay = ''
+
+  /** The settings the ladder needs, with the core Daily notes deciding which files are days. */
+  private places(): PlaceSettings {
+    return { ...this.settings, dayOf: (path) => dayOf(this.daily, path) }
+  }
 
   /** Creates today's daily from the core Daily notes settings when it is missing. */
   private async createDaily() {
     this.dailyDay = today()
     const config = await readDailyConfig(this.app)
-    await createIfMissing(this.app, dailyNote(config, moment().format(config.format || 'YYYY-MM-DD')))
+    // other folder or format: other files are days now
+    if (JSON.stringify(config) !== JSON.stringify(this.daily)) {
+      this.daily = config
+      this.rebuild()
+    }
+    const now = moment()
+    await createIfMissing(
+      this.app,
+      dailyNote(config, now.format(config.format || DAILY_FORMAT), (f) => now.format(f)),
+    )
   }
 
   /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
@@ -89,6 +112,7 @@ export default class TidePlugin extends Plugin {
   async onload() {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<TideSettings> | null) }
     this.addSettingTab(new TideSettingTab(this.app, this))
+    this.daily = await readDailyConfig(this.app)
 
     this.app.workspace.onLayoutReady(() => void this.index.rebuild())
     // 'changed' covers edits, new files and frontmatter; it hands over the content already read
@@ -103,7 +127,7 @@ export default class TidePlugin extends Plugin {
       }),
     )
     this.registerMarkdownCodeBlockProcessor('tide-tasks', (_source, el, ctx) => {
-      ctx.addChild(new TasksBlock(el, this.app, this.index, () => placeOf(ctx.sourcePath, null, this.settings)))
+      ctx.addChild(new TasksBlock(el, this.app, this.index, () => placeOf(ctx.sourcePath, null, this.places())))
     })
     // the daily is born on startup, on coming back to the app and at midnight with the app open
     this.app.workspace.onLayoutReady(() => void this.createDaily())

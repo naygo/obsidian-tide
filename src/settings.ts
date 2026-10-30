@@ -1,10 +1,11 @@
 import { type App, Modal, Notice, normalizePath, PluginSettingTab, Setting } from 'obsidian'
 import { t } from './i18n'
-import { parseMarker } from './ladder'
+import { type PlaceSettings, parseMarker } from './ladder'
 import type TidePlugin from './main'
 import type { PeriodSettings } from './periods'
 
-export type TideSettings = PeriodSettings
+/** What the settings tab saves; the days come from the core Daily notes instead. */
+export type TideSettings = Omit<PlaceSettings, 'dayOf'> & PeriodSettings
 
 export const DEFAULT_SETTINGS: TideSettings = {
   periodsFolder: '',
