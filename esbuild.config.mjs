@@ -1,23 +1,23 @@
-import esbuild from "esbuild";
+import esbuild from 'esbuild'
 
-const prod = process.argv[2] === "production";
+const prod = process.argv[2] === 'production'
 
 const ctx = await esbuild.context({
-  entryPoints: ["src/main.ts"],
+  entryPoints: ['src/main.ts'],
   bundle: true,
-  external: ["obsidian", "electron", "@codemirror/*", "@lezer/*"],
-  format: "cjs",
-  target: "es2020",
-  platform: "browser",
-  sourcemap: prod ? false : "inline",
+  external: ['obsidian', 'electron', '@codemirror/*', '@lezer/*'],
+  format: 'cjs',
+  target: 'es2020',
+  platform: 'browser',
+  sourcemap: prod ? false : 'inline',
   minify: prod,
-  outfile: "main.js",
-  logLevel: "info",
-});
+  outfile: 'main.js',
+  logLevel: 'info',
+})
 
 if (prod) {
-  await ctx.rebuild();
-  await ctx.dispose();
+  await ctx.rebuild()
+  await ctx.dispose()
 } else {
-  await ctx.watch();
+  await ctx.watch()
 }
