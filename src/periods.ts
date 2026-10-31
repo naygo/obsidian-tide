@@ -1,4 +1,4 @@
-import { periodOf } from './ladder'
+import { firstDay, parseMarker, periodOf } from './ladder'
 
 export interface PeriodSettings {
   periodsFolder: string
@@ -27,7 +27,30 @@ export const PERIOD_TEMPLATE = '```tide-tasks\n```\n'
 export const DAILY_FORMAT = 'YYYY-MM-DD'
 
 // file names in the vault, so they stay the same whatever the UI language
-const TEMPLATE_NAMES = { week: 'Week', month: 'Month', year: 'Year' } as const
+const TEMPLATE_NAMES = { week: 'Week Template', month: 'Month Template', year: 'Year Template' } as const
+export const HABIT_TEMPLATE = 'Habit Template'
+
+/** {{title}} becomes the note's name and {{date}}, with or without a format, the YYYY-MM-DD `date`. */
+export function fillTemplate(text: string, title: string, date: string): string {
+  return text.replace(/{{\s*title\s*}}/gi, title).replace(/{{\s*date\s*(?::[^}]*)?}}/gi, date)
+}
+
+/**
+ * The templates Tide writes when missing, by name: plain Markdown with `created`, so a note born from one reads well
+ * without the plugin. The habit's carries the habit marker when it is a property, and its log heading.
+ */
+export function templateFiles(habitMarker: string): [string, string][] {
+  const period = `---\ncreated: {{date}}\n---\n${PERIOD_TEMPLATE}`
+  const m = parseMarker(habitMarker)
+  const marker =
+    'property' in m
+      ? m.value.startsWith('[[')
+        ? `${m.property}:\n  - "${m.value}"\n`
+        : `${m.property}: ${m.value}\n`
+      : ''
+  const habit = `---\n${marker}unit:\ndays:\ngoal:\ngoal_per:\nicon:\ncolor:\narchived: false\ncreated: {{date}}\n---\n\n## registro\n`
+  return [...Object.values(TEMPLATE_NAMES).map((name): [string, string] => [name, period]), [HABIT_TEMPLATE, habit]]
+}
 
 const join = (folder: string | undefined, name: string) => {
   const dir = (folder ?? '').replace(/^\/+|\/+$/g, '')
@@ -63,5 +86,12 @@ export function periodNote(key: string, s: PeriodSettings): NoteSpec | null {
   const path = join(s.periodsFolder, `${key}.md`)
   const kind = periodOf(path, s.periodsFolder)?.kind
   if (kind !== 'week' && kind !== 'month' && kind !== 'year') return null
-  return { path, template: join(s.templatesFolder, `${TEMPLATE_NAMES[kind]}.md`), fallback: PERIOD_TEMPLATE }
+  // the first day, never today: two devices creating the same period write the same file
+  const first = firstDay({ kind, key })
+  return {
+    path,
+    template: join(s.templatesFolder, `${TEMPLATE_NAMES[kind]}.md`),
+    fallback: PERIOD_TEMPLATE,
+    fill: (text) => fillTemplate(text, key, first),
+  }
 }

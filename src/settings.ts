@@ -8,7 +8,14 @@ import { THEMES, type Theme } from './themes'
 
 /** What the settings tab saves; the days come from the core Daily notes instead. */
 export type TideSettings = Omit<PlaceSettings, 'dayOf'> &
-  PeriodSettings & { habitMarker: string; contextMarker: string; visual: Visual; theme: Theme }
+  PeriodSettings & {
+    habitMarker: string
+    contextMarker: string
+    visual: Visual
+    theme: Theme
+    /** iso writes timestamps as plain ISO dates, so a note reads well without the plugin */
+    dates: 'iso' | 'weekday'
+  }
 
 export const DEFAULT_SETTINGS: TideSettings = {
   periodsFolder: '',
@@ -19,6 +26,7 @@ export const DEFAULT_SETTINGS: TideSettings = {
   templatesFolder: 'templates',
   visual: 'org',
   theme: 'obsidian',
+  dates: 'iso',
 }
 
 const PATHS = ['periodsFolder', 'inbox', 'listMarker', 'habitMarker', 'contextMarker', 'templatesFolder'] as const
@@ -38,7 +46,7 @@ export class TideSettingTab extends PluginSettingTab {
       desc: t(`settings.${key}.desc`),
       control: { type: 'text' as const, key, placeholder: DEFAULT_SETTINGS[key] },
     }))
-    const dropdown = (key: 'visual' | 'theme', options: Record<string, string>) => ({
+    const dropdown = (key: 'visual' | 'theme' | 'dates', options: Record<string, string>) => ({
       name: t(`settings.${key}`),
       desc: t(`settings.${key}.desc`),
       control: { type: 'dropdown' as const, key, options },
@@ -46,6 +54,7 @@ export class TideSettingTab extends PluginSettingTab {
     return [
       ...paths,
       dropdown('visual', { org: t('settings.visual.org'), standard: t('settings.visual.standard') }),
+      dropdown('dates', { iso: t('settings.dates.iso'), weekday: t('settings.dates.weekday') }),
       dropdown('theme', Object.fromEntries(THEMES.map((theme) => [theme, t(`settings.theme.${theme}`)]))),
     ]
   }
@@ -117,8 +126,14 @@ export class TextModal extends Modal {
   }
 }
 
-/** Creates a list, habit or context note with the configured marker, plus `extra` properties, and opens it. */
-export async function createMarked(app: App, marker: string, name: string, extra: Record<string, unknown> = {}) {
+/** Creates a list, habit or context note from `content`, with the configured marker and `extra` properties; opens it. */
+export async function createMarked(
+  app: App,
+  marker: string,
+  name: string,
+  extra: Record<string, unknown> = {},
+  content = '',
+) {
   const m = parseMarker(marker)
   const path = normalizePath('folder' in m ? `${m.folder}/${name}.md` : `${name}.md`)
   if (app.vault.getAbstractFileByPath(path)) {
@@ -129,7 +144,7 @@ export async function createMarked(app: App, marker: string, name: string, extra
   if (folder && !app.vault.getAbstractFileByPath(folder)) await app.vault.createFolder(folder)
   let file
   try {
-    file = await app.vault.create(path, '')
+    file = await app.vault.create(path, content)
   } catch {
     new Notice(t('newNote.invalid'))
     return
@@ -137,7 +152,8 @@ export async function createMarked(app: App, marker: string, name: string, extra
   if ('property' in m || Object.keys(extra).length) {
     await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
       // links go in a list, as in `categories`; any other value stays a plain property
-      if ('property' in m) fm[m.property] = m.value.startsWith('[[') ? [m.value] : m.value
+      // a template already carrying the marker keeps it as written
+      if ('property' in m && !(m.property in fm)) fm[m.property] = m.value.startsWith('[[') ? [m.value] : m.value
       Object.assign(fm, extra)
     })
   }

@@ -3,7 +3,7 @@ import { shiftDate } from './org'
 
 /** A habit: a note marked as one, its frontmatter read with the property names in en. */
 export interface Habit {
-  /** the note's name, which is also the key of its mark in a daily's frontmatter */
+  /** the note's name */
   name: string
   path: string
   /** null is a yes/no habit */
@@ -107,31 +107,66 @@ export function plannedOn(h: Habit, date: string): boolean {
   return !h.archived && (!h.days || h.days.includes(new Date(Date.UTC(y, m - 1, d)).getUTCDay()))
 }
 
-/** Marks with `true`, or unmarks with `false`, so the habit stays in the daily's properties; for processFrontMatter. */
-export function toggleMark(fm: Record<string, unknown>, name: string) {
-  fm[name] = !isMarked(fm, name)
+/** The heading of a habit note's log: one line per marked day, a link to its daily and the amount when it has a unit. */
+export const LOG_HEADING = '## registro'
+const LOG = /^##\s+registro\s*$/i
+const MARK = /^- \[\[([^\]|#]+)(?:\|[^\]]*)?\]\](?:\s+(\d+(?:[.,]\d+)?))?\s*$/
+
+/** The lines of the log: from its heading to the next heading or the end; null with no heading. */
+function logRange(lines: string[]): [number, number] | null {
+  const start = lines.findIndex((l) => LOG.test(l))
+  if (start < 0) return null
+  const next = lines.findIndex((l, i) => i > start && /^#{1,6}\s/.test(l))
+  return [start, next < 0 ? lines.length : next]
 }
 
-/** A mark as an amount: `true` is 1, a number or a numeric string is its number, anything else 0. */
-export function amountOf(fm: Record<string, unknown> | null | undefined, name: string): number {
-  const value = fm?.[name]
-  if (value === true) return 1
-  const n = typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN
-  return Number.isFinite(n) && n > 0 ? n : 0
+const markOf = (line: string) => {
+  const m = MARK.exec(line)
+  return m ? { name: m[1].trim(), amount: m[2] ? Number(m[2].replace(',', '.')) : 1 } : null
 }
 
-/** A missing property is not marked, never "failed"; marked is what counts toward the goal. */
-export const isMarked = (fm: Record<string, unknown> | null | undefined, name: string) => amountOf(fm, name) > 0
-
-/** Writes a quantity, or 0 on no number, so the habit stays in the daily's properties; for processFrontMatter. */
-export function setAmount(fm: Record<string, unknown>, name: string, n: number) {
-  fm[name] = n > 0 ? n : 0
+/** The amount of each daily name in the log of a habit note; a line with no number is 1, a 0 is no mark. */
+export function marksIn(content: string): Record<string, number> {
+  const lines = content.split('\n')
+  const range = logRange(lines)
+  const out: Record<string, number> = {}
+  if (!range) return out
+  for (const line of lines.slice(range[0] + 1, range[1])) {
+    const m = markOf(line)
+    if (m && m.amount > 0) out[m.name] = (out[m.name] ?? 0) + m.amount
+  }
+  return out
 }
 
-/** The habits planned on `date` and not paused, unmarked, so a new daily shows them in its properties to mark there. */
-export function seedHabits(fm: Record<string, unknown>, habits: Habit[], date: string, paused: Set<string>) {
-  for (const h of habits)
-    if (plannedOn(h, date) && !paused.has(h.name.toLowerCase()) && !(h.name in fm)) fm[h.name] = h.unit ? 0 : false
+/**
+ * The habit note with the mark of the daily `name` set to `amount`: its lines replaced by one, in date order so two
+ * devices merge cleanly, or removed on 0. A habit with no unit writes the link alone. The heading is added when missing.
+ */
+export function writeMark(content: string, name: string, amount: number, unit: boolean): string {
+  let lines = content.split('\n')
+  let range = logRange(lines)
+  if (!range) {
+    if (!(amount > 0)) return content
+    const body = content.replace(/\s*$/, '')
+    lines = `${body}${body ? '\n\n' : ''}${LOG_HEADING}\n`.split('\n')
+    range = logRange(lines)!
+  }
+  const [start] = range
+  let end = range[1]
+  for (let i = end - 1; i > start; i--)
+    if (markOf(lines[i])?.name === name) {
+      lines.splice(i, 1)
+      end--
+    }
+  if (amount > 0) {
+    let at = start + 1
+    for (let i = start + 1; i < end; i++) {
+      const m = markOf(lines[i])
+      if (m && m.name < name) at = i + 1
+    }
+    lines.splice(at, 0, unit ? `- [[${name}]] ${amount}` : `- [[${name}]]`)
+  }
+  return lines.join('\n')
 }
 
 /** The amounts by date summed over the goal's period that holds `date`; a mark off the planned days counts the same. */
@@ -150,26 +185,4 @@ export function pace(h: Habit, date: string, amounts: Record<string, number>) {
   let daysLeft = 0
   for (let d = date; keyOf(h.goal.per, d) === key; d = shiftDate(d, '+1d')) daysLeft++
   return { goal: h.goal, done, left: Math.max(0, h.goal.amount - done), daysLeft }
-}
-
-/** Whether any note already uses `name` as a property, ignoring case as Obsidian's properties do. */
-export const propertyUsed = (name: string, frontmatters: (Record<string, unknown> | null)[]) =>
-  frontmatters.some((fm) => Object.keys(fm ?? {}).some((key) => key.toLowerCase() === name.toLowerCase()))
-
-/** The marks of a daily whose key no habit note has: a habit renamed outside the plugin leaves its marks behind. */
-export function orphanKeys(fm: Record<string, unknown> | null | undefined, habitNames: string[]): string[] {
-  // only a mark reads as a habit key, so tags, categories and any other property never do; the case is exact, as
-  // amountOf reads it, so `Gym` beside a note `gym` is an orphan rather than a mark nobody sees
-  return Object.keys(fm ?? {}).filter((key) => isMarked(fm, key) && !habitNames.includes(key))
-}
-
-/** Moves a mark from one key to another, merging into a mark already there; for processFrontMatter. */
-export function renameMark(fm: Record<string, unknown>, from: string, to: string) {
-  if (!(from in fm) || from === to) return
-  const value = fm[from]
-  const amount = amountOf(fm, from)
-  delete fm[from]
-  if (!(to in fm) || (amount && !isMarked(fm, to))) fm[to] = value
-  // marked under both after an outside rename: yes/no stays true, a quantity sums; an unmarked one adds nothing
-  else if (amount && !(value === true && fm[to] === true)) setAmount(fm, to, amount + amountOf(fm, to))
 }

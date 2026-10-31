@@ -1,18 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  amountOf,
-  habitOf,
-  isMarked,
-  orphanKeys,
-  pace,
-  plannedOn,
-  progress,
-  propertyUsed,
-  renameMark,
-  seedHabits,
-  setAmount,
-  toggleMark,
-} from './habits'
+import { habitOf, marksIn, pace, plannedOn, progress, writeMark } from './habits'
 
 describe('habitOf', () => {
   it('reads a yes/no habit planned every day from a note with only the marker', () => {
@@ -69,44 +56,6 @@ describe('plannedOn', () => {
   })
 })
 
-describe('isMarked', () => {
-  it('reads a missing or false property as not marked', () => {
-    expect(isMarked(null, 'gym')).toBe(false)
-    expect(isMarked({}, 'gym')).toBe(false)
-    expect(isMarked({ gym: false }, 'gym')).toBe(false)
-    expect(isMarked({ gym: true }, 'gym')).toBe(true)
-  })
-
-  it('reads a quantity as marked, and 0 or a word as not, as the goal counts them', () => {
-    expect(isMarked({ água: 2 }, 'água')).toBe(true)
-    expect(isMarked({ água: 0 }, 'água')).toBe(false)
-    expect(isMarked({ gym: 'sim' }, 'gym')).toBe(false)
-  })
-})
-
-describe('toggleMark', () => {
-  it('writes true on a habit not marked', () => {
-    const fm: Record<string, unknown> = { tags: ['x'] }
-    toggleMark(fm, 'gym')
-    expect(fm).toEqual({ tags: ['x'], gym: true })
-  })
-
-  it('writes false on a marked habit, keeping it in the properties', () => {
-    const fm: Record<string, unknown> = { gym: true }
-    toggleMark(fm, 'gym')
-    expect(fm).toEqual({ gym: false })
-    toggleMark(fm, 'gym')
-    expect(fm).toEqual({ gym: true })
-  })
-})
-
-describe('propertyUsed', () => {
-  it('finds a name already used as a property in any note, ignoring case', () => {
-    expect(propertyUsed('Tags', [null, { tags: ['x'] }])).toBe(true)
-    expect(propertyUsed('gym', [null, { tags: ['x'] }])).toBe(false)
-  })
-})
-
 describe('habitOf goal', () => {
   it('reads a positive goal with its period', () => {
     expect(habitOf('gym.md', { goal: 3, goal_per: 'week' }).goal).toEqual({ amount: 3, per: 'week' })
@@ -122,59 +71,6 @@ describe('habitOf goal', () => {
     expect(habitOf('gym.md', { goal: 3, goal_per: 'fortnight' }).goal).toBeNull()
     expect(habitOf('gym.md', { goal: 0, goal_per: 'week' }).goal).toBeNull()
     expect(habitOf('gym.md', { goal: 'muito', goal_per: 'week' }).goal).toBeNull()
-  })
-})
-
-describe('amountOf', () => {
-  it('reads true as 1, a number as itself and a numeric string as its number', () => {
-    expect(amountOf({ gym: true }, 'gym')).toBe(1)
-    expect(amountOf({ água: 2.5 }, 'água')).toBe(2.5)
-    expect(amountOf({ água: '2' }, 'água')).toBe(2)
-  })
-
-  it('reads anything else as 0', () => {
-    expect(amountOf(null, 'gym')).toBe(0)
-    expect(amountOf({ gym: false }, 'gym')).toBe(0)
-    expect(amountOf({ gym: 'sim' }, 'gym')).toBe(0)
-  })
-})
-
-describe('setAmount', () => {
-  it('writes the number', () => {
-    const fm: Record<string, unknown> = {}
-    setAmount(fm, 'água', 2)
-    expect(fm).toEqual({ água: 2 })
-  })
-
-  it('writes 0 on 0 or no number, keeping it in the properties', () => {
-    for (const n of [0, NaN, -1]) {
-      const fm: Record<string, unknown> = { água: 2 }
-      setAmount(fm, 'água', n)
-      expect(fm).toEqual({ água: 0 })
-    }
-  })
-})
-
-describe('seedHabits', () => {
-  // 2026-10-31 is a Saturday
-  const habits = [
-    habitOf('gym.md', { days: ['mon'] }),
-    habitOf('leitura.md', null),
-    habitOf('água.md', { unit: 'copos' }),
-    habitOf('Casa.md', null),
-    habitOf('velho.md', { archived: true }),
-  ]
-
-  it('writes the planned habits unmarked, skipping the paused, the archived and the off days', () => {
-    const fm: Record<string, unknown> = { tags: ['daily'] }
-    seedHabits(fm, habits, '2026-10-31', new Set(['casa']))
-    expect(fm).toEqual({ tags: ['daily'], leitura: false, água: 0 })
-  })
-
-  it('keeps a mark already there', () => {
-    const fm: Record<string, unknown> = { leitura: true }
-    seedHabits(fm, habits, '2026-10-31', new Set())
-    expect(fm).toEqual({ leitura: true, água: 0, Casa: false })
   })
 })
 
@@ -245,56 +141,45 @@ describe('pace', () => {
   })
 })
 
-describe('orphanKeys', () => {
-  it('finds a mark whose key no habit note has, as after renaming the note outside the plugin', () => {
-    expect(orphanKeys({ gym: true, água: 2 }, ['musculação', 'água'])).toEqual(['gym'])
+describe('marksIn', () => {
+  it('reads the log: a link alone is 1, a number its amount, a comma as a decimal point', () => {
+    const note = '---\nunit: L\n---\n## registro\n- [[2026-10-30]] 1,5\n- [[2026-10-31]]\n- [[2026-11-01]] 0\n'
+    expect(marksIn(note)).toEqual({ '2026-10-30': 1.5, '2026-10-31': 1 })
   })
 
-  it('matches habit names by exact case, as the marks are read, so a mark nobody sees still shows', () => {
-    expect(orphanKeys({ gym: true }, ['gym'])).toEqual([])
-    expect(orphanKeys({ Gym: true }, ['gym'])).toEqual(['Gym'])
+  it('reads only the lines under the heading, up to the next one', () => {
+    const note = '- [[2026-10-01]]\n## registro\n- [[2026-10-02]]\ntext\n## outro\n- [[2026-10-03]]'
+    expect(marksIn(note)).toEqual({ '2026-10-02': 1 })
   })
 
-  it('reads only marks as habit keys, so tags and other properties never count', () => {
-    expect(orphanKeys({ tags: ['daily'], categories: ['[[daily]]'], mood: 'ok', gym: 0 }, [])).toEqual([])
-    expect(orphanKeys(null, [])).toEqual([])
+  it('is empty with no heading', () => {
+    expect(marksIn('---\nunit:\n---\n')).toEqual({})
   })
 })
 
-describe('renameMark', () => {
-  it('moves the mark to the new key and drops the old one', () => {
-    const fm: Record<string, unknown> = { tags: ['x'], gym: true }
-    renameMark(fm, 'gym', 'musculação')
-    expect(fm).toEqual({ tags: ['x'], musculação: true })
+describe('writeMark', () => {
+  it('adds the heading and the line to a note without a log', () => {
+    expect(writeMark('---\nunit:\n---\n', '2026-10-31', 1, false)).toBe(
+      '---\nunit:\n---\n\n## registro\n- [[2026-10-31]]\n',
+    )
   })
 
-  it('renames by case only', () => {
-    const fm: Record<string, unknown> = { gym: 2 }
-    renameMark(fm, 'gym', 'Gym')
-    expect(fm).toEqual({ Gym: 2 })
+  it('keeps the lines in date order, and replaces the line of the same day', () => {
+    let note = '## registro\n- [[2026-10-29]] 1\n- [[2026-10-31]] 2\n'
+    note = writeMark(note, '2026-10-30', 3, true)
+    expect(note).toBe('## registro\n- [[2026-10-29]] 1\n- [[2026-10-30]] 3\n- [[2026-10-31]] 2\n')
+    expect(writeMark(note, '2026-10-31', 4, true)).toBe(
+      '## registro\n- [[2026-10-29]] 1\n- [[2026-10-30]] 3\n- [[2026-10-31]] 4\n',
+    )
   })
 
-  it('leaves a daily without the old key as it was', () => {
-    const fm: Record<string, unknown> = { musculação: true }
-    renameMark(fm, 'gym', 'musculação')
-    expect(fm).toEqual({ musculação: true })
+  it('removes the line on 0, and writes nothing on 0 with no log', () => {
+    expect(writeMark('## registro\n- [[2026-10-31]]\n', '2026-10-31', 0, false)).toBe('## registro\n')
+    expect(writeMark('text\n', '2026-10-31', 0, false)).toBe('text\n')
   })
 
-  it('merges into a mark already under the new key instead of overwriting it', () => {
-    const yes: Record<string, unknown> = { gym: true, musculação: true }
-    renameMark(yes, 'gym', 'musculação')
-    expect(yes).toEqual({ musculação: true })
-    const amount: Record<string, unknown> = { agua: 2, água: 3 }
-    renameMark(amount, 'agua', 'água')
-    expect(amount).toEqual({ água: 5 })
-  })
-
-  it('adds nothing from an unmarked key, and a mark replaces an unmarked one', () => {
-    const off: Record<string, unknown> = { gym: false, musculação: true }
-    renameMark(off, 'gym', 'musculação')
-    expect(off).toEqual({ musculação: true })
-    const on: Record<string, unknown> = { gym: true, musculação: false }
-    renameMark(on, 'gym', 'musculação')
-    expect(on).toEqual({ musculação: true })
+  it('round-trips through marksIn', () => {
+    const note = writeMark(writeMark('', '2026-10-31', 2.5, true), '2026-10-01', 1, true)
+    expect(marksIn(note)).toEqual({ '2026-10-01': 1, '2026-10-31': 2.5 })
   })
 })

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { captureLine, facesOf, parseBlock, parseHead, serializeBlock, shiftDate } from './org'
+import {
+  captureLine,
+  facesOf,
+  formatTimestamp,
+  parseBlock,
+  parseHead,
+  serializeBlock,
+  shiftDate,
+  writeWeekday,
+} from './org'
 
 const SPEC_EXAMPLE = [
   '- TODO [#A] dentista :saude:casa:',
@@ -164,5 +173,19 @@ describe('facesOf', () => {
 
   it('leaves a link to a day and plain text alone', () => {
     expect(on('- TODO ver [[2026-10-31]] hoje')).toEqual([])
+  })
+})
+
+describe('formatTimestamp without the weekday', () => {
+  it('writes a plain ISO date, and the parser still reads the old form with a weekday', () => {
+    writeWeekday(false)
+    try {
+      expect(formatTimestamp({ date: '2026-10-31', time: '10:47', repeater: null }, false)).toBe('[2026-10-31 10:47]')
+      expect(formatTimestamp({ date: '2026-10-31', time: null, repeater: '+1w' }, true)).toBe('<2026-10-31 +1w>')
+    } finally {
+      writeWeekday(true)
+    }
+    const block = parseBlock(['- TODO a', '  SCHEDULED: <2026-10-31 sáb>'])!
+    expect(block.scheduled).toEqual({ date: '2026-10-31', time: null, repeater: null })
   })
 })

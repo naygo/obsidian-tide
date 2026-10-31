@@ -132,9 +132,16 @@ export function parseBlock(lines: string[]): OrgBlock | null {
   }
 }
 
-/** The weekday is decorative: the parser skips it and it is written from the date, in the UI language. */
+let withWeekday = true
+
+/** Whether timestamps are written with the weekday, from the settings; the parser reads them either way. */
+export function writeWeekday(on: boolean) {
+  withWeekday = on
+}
+
+/** The weekday is decorative: the parser skips it and it is written from the date, in the UI language, when on. */
 export function formatTimestamp(ts: Timestamp, active: boolean): string {
-  const inner = [ts.date, weekday(ts.date), ts.time, ts.repeater].filter(Boolean).join(' ')
+  const inner = [ts.date, withWeekday && weekday(ts.date), ts.time, ts.repeater].filter(Boolean).join(' ')
   return active ? `<${inner}>` : `[${inner}]`
 }
 

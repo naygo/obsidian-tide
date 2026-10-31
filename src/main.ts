@@ -16,17 +16,8 @@ import {
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { foldTasks, tideEditor } from './editor'
-import {
-  HABIT_PROPERTIES,
-  type Habit,
-  amountOf,
-  habitOf,
-  orphanKeys,
-  propertyUsed,
-  renameMark,
-  seedHabits,
-} from './habits'
-import { HABITS_VIEW, HabitsBlock, HabitsView } from './habitViews'
+import { HABIT_PROPERTIES, type Habit, habitOf, marksIn, writeMark } from './habits'
+import { HABITS_VIEW, HabitsView } from './habitViews'
 import { declarationLine, parseInterval, pausedOn } from './contexts'
 import { type SuggestContext, type Suggestion, type Suggestions, orgSuggest } from './complete'
 import { type MessageKey, t } from './i18n'
@@ -45,8 +36,18 @@ import {
 } from './ladder'
 import { migrate, moveBlock } from './move'
 import { THEMES, themeOf } from './themes'
-import { captureLine, parseBlock } from './org'
-import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
+import { captureLine, parseBlock, writeWeekday } from './org'
+import {
+  DAILY_FORMAT,
+  type DailyConfig,
+  HABIT_TEMPLATE,
+  type NoteSpec,
+  dailyName,
+  dailyNote,
+  fillTemplate,
+  periodNote,
+  templateFiles,
+} from './periods'
 import { DEFAULT_SETTINGS, TextModal, type TideSettings, TideSettingTab, createMarked } from './settings'
 import {
   AgendaView,
@@ -150,31 +151,6 @@ class MoveModal extends FuzzySuggestModal<MoveTarget> {
 
   onChooseItem(target: MoveTarget) {
     this.choose(target.place)
-  }
-}
-
-/** A fuzzy picker over plain names. */
-class PickModal extends FuzzySuggestModal<string> {
-  constructor(
-    app: App,
-    private items: string[],
-    placeholder: string,
-    private choose: (item: string) => void,
-  ) {
-    super(app)
-    this.setPlaceholder(placeholder)
-  }
-
-  getItems() {
-    return this.items
-  }
-
-  getItemText(item: string) {
-    return item
-  }
-
-  onChooseItem(item: string) {
-    this.choose(item)
   }
 }
 
@@ -290,6 +266,8 @@ export default class TidePlugin extends Plugin {
   private rebuild = debounce(() => void this.index.rebuild(), 500, true)
   /** the day the daily was last created for, to notice midnight */
   private dailyDay = ''
+  /** the log of each habit note, by its path: the amount of each marked day by date */
+  private marks = new Map<string, Record<string, number>>()
   /** a second run would read the same files and append their blocks to the daily again */
   private migrating = false
   /** Enter, Ctrl+Alt+Tab and the task visual; swapped in place when the visual changes */
@@ -298,6 +276,7 @@ export default class TidePlugin extends Plugin {
 
   /** Builds the editor extensions for the visual in the settings, only when it changed: Padrão folds on each build. */
   private applyVisual() {
+    writeWeekday(this.settings.dates === 'weekday')
     if (this.visual === this.settings.visual) return
     this.visual = this.settings.visual
     this.editor.splice(0, this.editor.length, ...tideEditor(this.visual))
@@ -497,9 +476,16 @@ export default class TidePlugin extends Plugin {
   private habits(): Habit[] {
     return this.app.vault
       .getMarkdownFiles()
-      .filter((f) => hasMarker(f.path, this.frontmatter(f), this.settings.habitMarker))
+      .filter((f) => this.isHabit(f))
       .map((f) => habitOf(f.path, this.frontmatter(f)))
       .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /** A note with the habit marker, outside the templates folder, where the Habit template carries the marker too. */
+  private isHabit(file: TFile) {
+    const templates = this.settings.templatesFolder.replace(/\/+$/, '')
+    if (templates && file.path.startsWith(templates + '/')) return false
+    return hasMarker(file.path, this.frontmatter(file), this.settings.habitMarker)
   }
 
   /** The context notes with their declarations, by name. */
@@ -531,97 +517,58 @@ export default class TidePlugin extends Plugin {
     return this.app.metadataCache.getFileCache(file)?.frontmatter ?? null
   }
 
-  /** Edits the frontmatter of the daily of `date` to mark a habit, created when missing; a future day is read-only. */
-  private async markHabit(date: string, edit: (fm: Record<string, unknown>) => void) {
-    if (date > today()) return
-    const file = await this.day(date)
-    if (file) await this.app.fileManager.processFrontMatter(file, edit)
+  /** The daily name of a YYYY-MM-DD date in the core's format, as the log links it, and back; null for no date. */
+  private dailyNameOf(date: string) {
+    return moment(date, 'YYYY-MM-DD').format(this.daily.format || DAILY_FORMAT)
   }
 
-  /** Whether any note uses `name` as a property, as a habit's name must not. */
-  private propertyUsed(name: string) {
-    return propertyUsed(
-      name,
-      this.app.vault.getMarkdownFiles().map((f) => this.frontmatter(f)),
-    )
+  private dateOfName(name: string): string | null {
+    const day = moment(name, this.daily.format || DAILY_FORMAT, true)
+    return day.isValid() ? day.format('YYYY-MM-DD') : null
   }
 
-  /** Rename habit: the note first, then the key of its marks in every daily; a daily left behind shows as an orphan. */
-  private async renameHabit(file: TFile, name: string) {
-    const from = file.basename
-    if (name === from) return
-    // a slash would move the note to another folder
-    if (name.includes('/')) return void new Notice(t('renameHabit.invalid'))
-    const path = normalizePath(
-      file.parent && file.parent.path !== '/' ? `${file.parent.path}/${name}.md` : `${name}.md`,
-    )
-    const existing = this.app.vault.getAbstractFileByPath(path)
-    if (existing && existing !== file) return void new Notice(t('newNote.exists'))
-    // its own marks don't count, so a rename by case only goes through
-    if (name.toLowerCase() !== from.toLowerCase() && this.propertyUsed(name)) return void new Notice(t('newHabit.used'))
-    try {
-      // renameFile, not vault.rename: it updates the links, as in the contexts' pause and declarations
-      await this.app.fileManager.renameFile(file, path)
-    } catch {
-      return void new Notice(t('renameHabit.invalid'))
-    }
-    await this.renameMarks(from, name)
-  }
-
-  /** Moves the marks under `from` to `to` in every daily that has them. */
-  private async renameMarks(from: string, to: string) {
-    for (const f of this.dailies())
-      if (this.frontmatter(f)?.[from] !== undefined)
-        await this.app.fileManager.processFrontMatter(f, (fm: Record<string, unknown>) => renameMark(fm, from, to))
-  }
-
-  /** The notes that are dailies under the core Daily notes settings. */
-  private dailies(): TFile[] {
-    return this.app.vault.getMarkdownFiles().filter((f) => dayOf(this.daily, f.path))
-  }
-
-  /** The keys of marks in any daily that no habit note has. */
-  private orphans(): string[] {
-    // ponytail: scans every daily's cached frontmatter, also on each command palette check; index the dailies if it lags
-    const names = this.habits().map((h) => h.name)
-    return [...new Set(this.dailies().flatMap((f) => orphanKeys(this.frontmatter(f), names)))].sort()
-  }
-
-  /** Fix on an orphan: its marks move to the habit picked; with no key given, the orphan is picked first. */
-  private fixOrphan(key?: string) {
-    if (!key) {
-      const orphans = this.orphans()
-      if (orphans.length !== 1)
-        return void new PickModal(this.app, orphans, t('orphan.pickKey'), (k) => this.fixOrphan(k)).open()
-      key = orphans[0]
-    }
-    const habits = this.habits().map((h) => h.name)
-    new PickModal(this.app, habits, t('orphan.pickHabit'), (name) => void this.renameMarks(key, name)).open()
-  }
-
-  /** The frontmatter of each daily, by date. */
-  private dailyFrontmatters(): Record<string, Record<string, unknown>> {
-    // ponytail: scans every daily's cached frontmatter on each render of the board; index the dailies if it lags
-    const frontmatters: Record<string, Record<string, unknown>> = {}
-    for (const f of this.dailies()) frontmatters[dayOf(this.daily, f.path)!] = this.frontmatter(f) ?? {}
-    return frontmatters
-  }
-
-  /** The habit's amount in each daily that has it, by date. */
-  private habitAmounts(habit: Habit): Record<string, number> {
-    // ponytail: scans every note's cached frontmatter per habit with a goal on each render; index the dailies if it lags
+  /** Reads the log of a habit note into its amounts by date; any other note drops out. */
+  private readMarks(file: TFile, data: string) {
+    if (!this.isHabit(file)) return void this.marks.delete(file.path)
     const amounts: Record<string, number> = {}
-    for (const f of this.dailies()) {
-      const n = amountOf(this.frontmatter(f), habit.name)
-      if (n) amounts[dayOf(this.daily, f.path)!] = n
+    for (const [name, n] of Object.entries(marksIn(data))) {
+      const date = this.dateOfName(name)
+      if (date) amounts[date] = (amounts[date] ?? 0) + n
     }
-    return amounts
+    this.marks.set(file.path, amounts)
   }
 
-  /** New habit: its name becomes a property of the dailies, so a name already used as a property is refused. */
+  /** Writes the mark of `date` in the habit note's log; a future day is read-only, and the daily is never created. */
+  private async markHabit(date: string, habit: Habit, amount: number) {
+    if (date > today()) return
+    const file = this.app.vault.getAbstractFileByPath(habit.path)
+    if (file instanceof TFile)
+      await this.app.vault.process(file, (d) => writeMark(d, this.dailyNameOf(date), amount, !!habit.unit))
+  }
+
+  /** The habit's amount on each marked day, by date. */
+  private habitAmounts(habit: Habit): Record<string, number> {
+    return this.marks.get(habit.path) ?? {}
+  }
+
+  /** New habit: from the Habit template in the templates folder, or with empty properties when it's missing. */
   private async createHabit(name: string) {
-    if (this.propertyUsed(name)) new Notice(t('newHabit.used'))
-    else await createMarked(this.app, this.settings.habitMarker, name, HABIT_PROPERTIES)
+    const path = normalizePath(`${this.settings.templatesFolder}/${HABIT_TEMPLATE}.md`)
+    const template = this.settings.templatesFolder ? this.app.vault.getAbstractFileByPath(path) : null
+    if (!(template instanceof TFile)) return createMarked(this.app, this.settings.habitMarker, name, HABIT_PROPERTIES)
+    const content = fillTemplate(await this.app.vault.read(template), name, today())
+    await createMarked(this.app, this.settings.habitMarker, name, {}, content)
+  }
+
+  /** The Week, Month, Year and Habit templates, written once when missing and never over the user's edits. */
+  private async createTemplates() {
+    if (!this.settings.templatesFolder) return
+    for (const [name, content] of templateFiles(this.settings.habitMarker))
+      await createIfMissing(this.app, {
+        path: `${this.settings.templatesFolder}/${name}.md`,
+        template: null,
+        fallback: content,
+      })
   }
 
   /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
@@ -646,48 +593,44 @@ export default class TidePlugin extends Plugin {
     this.applyTheme()
     this.registerEditorExtension(this.editor)
 
-    this.app.workspace.onLayoutReady(() => void this.index.rebuild())
-    // 'changed' covers edits, new files and frontmatter; it hands over the content already read
-    this.registerEvent(this.app.metadataCache.on('changed', (file, data) => this.index.update(file, data)))
-    this.registerEvent(this.app.vault.on('delete', (file) => this.index.remove(file.path)))
+    this.app.workspace.onLayoutReady(async () => {
+      for (const f of this.app.vault.getMarkdownFiles())
+        if (this.isHabit(f)) this.readMarks(f, await this.app.vault.cachedRead(f))
+      await this.index.rebuild()
+      await this.createTemplates()
+    })
+    // 'changed' covers edits, new files and frontmatter; it hands over the content already read. The marks are read
+    // first, since the index's 'changed' redraws the views that show them
+    this.registerEvent(
+      this.app.metadataCache.on('changed', (file, data) => {
+        this.readMarks(file, data)
+        this.index.update(file, data)
+      }),
+    )
+    this.registerEvent(
+      this.app.vault.on('delete', (file) => {
+        this.marks.delete(file.path)
+        this.index.remove(file.path)
+      }),
+    )
     this.registerEvent(
       this.app.vault.on('rename', async (file, oldPath) => {
+        this.marks.delete(oldPath)
         this.index.remove(oldPath)
         // the place comes from the path, so a renamed file is read again
-        if (file instanceof TFile && file.extension === 'md')
-          this.index.update(file, await this.app.vault.cachedRead(file))
+        if (file instanceof TFile && file.extension === 'md') {
+          const data = await this.app.vault.cachedRead(file)
+          this.readMarks(file, data)
+          this.index.update(file, data)
+        }
       }),
     )
     this.registerMarkdownCodeBlockProcessor('tide-tasks', (_source, el, ctx) => {
       const place = () => placeOf(ctx.sourcePath, null, this.places())
       ctx.addChild(new TasksBlock(el, this.app, this.index, place, today, () => void this.migratePending()))
     })
-    this.registerMarkdownCodeBlockProcessor('tide-habits', (_source, el, ctx) => {
-      const day = () => dayOf(this.daily, ctx.sourcePath)
-      const habits = () => this.habits()
-      const amounts = (habit: Habit) => this.habitAmounts(habit)
-      const mark = (date: string, edit: (fm: Record<string, unknown>) => void) => void this.markHabit(date, edit)
-      const paused = (date: string) => this.paused(date)
-      const fix = (key: string) => this.fixOrphan(key)
-      ctx.addChild(
-        new HabitsBlock(el, this.app, ctx.sourcePath, day, habits, today, amounts, mark, paused, this.index, fix),
-      )
-    })
     // the daily is born on startup, on coming back to the app and at midnight with the app open
     this.app.workspace.onLayoutReady(() => void this.createDaily())
-    // a new daily, whoever creates it (Tide, the core Daily notes, a click on a link), takes the day's habits in its
-    // properties; only today or ahead, so a pull of past dailies is never written to
-    this.app.workspace.onLayoutReady(() =>
-      this.registerEvent(
-        this.app.vault.on('create', (file) => {
-          const date = file instanceof TFile ? dayOf(this.daily, file.path) : null
-          if (file instanceof TFile && date && date >= today())
-            void this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) =>
-              seedHabits(fm, this.habits(), date, this.paused(date)),
-            )
-        }),
-      ),
-    )
     const onReturn = () => document.visibilityState === 'visible' && void this.createDaily()
     this.registerDomEvent(document, 'visibilitychange', onReturn)
     this.registerDomEvent(window, 'focus', onReturn)
@@ -783,9 +726,9 @@ export default class TidePlugin extends Plugin {
         new HabitsView(
           leaf,
           () => this.habits(),
-          () => this.dailyFrontmatters(),
+          (habit) => this.habitAmounts(habit),
           today,
-          (date, edit) => void this.markHabit(date, edit),
+          (date, habit, amount) => void this.markHabit(date, habit, amount),
           () => this.contexts(),
           this.index,
         ),
@@ -797,7 +740,7 @@ export default class TidePlugin extends Plugin {
       callback: () => void this.openView(HABITS_VIEW, true),
     })
 
-    // a note named in a modal: a list or a context with its marker, a habit refused if its name is a property
+    // a note named in a modal: a list or a context with its marker, a habit from its template
     const NEW_NOTES: [string, MessageKey, (name: string) => Promise<void>][] = [
       ['new-list', 'command.newList', (name) => createMarked(this.app, this.settings.listMarker, name)],
       ['new-habit', 'command.newHabit', (name) => this.createHabit(name)],
@@ -829,32 +772,6 @@ export default class TidePlugin extends Plugin {
           { title: t('command.declareContext'), label: t('declare.label'), button: t('declare.add') },
           (interval) => void this.declareContext(context, interval),
         ).open()
-      },
-    })
-
-    // on the habit note open: renames it and the key of its marks in the dailies
-    this.addCommand({
-      id: 'rename-habit',
-      name: t('command.renameHabit'),
-      checkCallback: (checking) => {
-        const file = this.app.workspace.getActiveFile()
-        const habit = file && hasMarker(file.path, this.frontmatter(file), this.settings.habitMarker) ? file : null
-        if (checking || !habit) return !!habit
-        new TextModal(
-          this.app,
-          { title: t('command.renameHabit'), label: t('newNote.name'), button: t('command.renameHabit') },
-          (name) => void this.renameHabit(habit, name),
-        ).open()
-      },
-    })
-
-    // a habit note renamed outside the command leaves its marks orphaned, and only this fixes them
-    this.addCommand({
-      id: 'fix-orphan',
-      name: t('command.fixOrphan'),
-      checkCallback: (checking) => {
-        if (checking) return this.orphans().length > 0
-        this.fixOrphan()
       },
     })
 

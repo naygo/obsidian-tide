@@ -8,8 +8,6 @@ const ptBR = {
   'command.newHabit': 'Novo hábito',
   'command.newContext': 'Novo contexto',
   'command.declareContext': 'Declarar contexto',
-  'command.renameHabit': 'Renomear hábito',
-  'command.fixOrphan': 'Corrigir hábito órfão',
   'command.openWeek': 'Abrir esta semana',
   'command.openMonth': 'Abrir este mês',
   'command.openYear': 'Abrir este ano',
@@ -85,23 +83,15 @@ const ptBR = {
   'newNote.exists': 'Já existe uma nota com esse nome.',
   'newNote.invalid': 'Não foi possível criar a nota com esse nome.',
   // the habit's name is the key of its mark in the daily's frontmatter, so it can't clash with another property
-  'newHabit.used': 'Esse nome já é uma propriedade usada no vault.',
   // Rename habit: the note and the key of its marks in every daily
-  'renameHabit.invalid': 'Não foi possível renomear a nota com esse nome.',
   // a mark whose key no habit note has, as after renaming the note outside the plugin; never fixed by itself
-  'orphan.mark': 'Nenhuma nota de hábito tem esse nome: Corrigir liga a marca a um hábito',
-  'orphan.fix': 'Corrigir',
-  'orphan.pickKey': 'Qual marca órfã corrigir?',
-  'orphan.pickHabit': 'De qual hábito é essa marca?',
   // Declare context: the interval its line pauses the habits of the context's pause
   'declare.label': 'Intervalo (2026-11-01 → 2026-11-07, ou um dia)',
   'declare.add': 'Declarar',
   'declare.invalid': 'Intervalo inválido: use 2026-11-01 → 2026-11-07, ou uma data só.',
   'declare.empty': 'Este contexto não tem hábitos em pause.',
   // the tide-habits block: a future day shows its habits read-only
-  'habits.future': 'Dia futuro: só leitura',
   // the habits not planned on the day, folded below the planned ones
-  'habits.others': 'Outros',
   // after the goal's progress, as in 2/8 hoje or 1/3 na semana
   'habits.per.day': 'hoje',
   'habits.per.week': 'na semana',
@@ -134,6 +124,10 @@ const ptBR = {
     'No Live Preview. Org: o texto colorido. Padrão: o checkbox do Obsidian, com os detalhes recolhidos num resumo.',
   'settings.visual.org': 'Org',
   'settings.visual.standard': 'Padrão',
+  'settings.dates': 'Datas das tarefas',
+  'settings.dates.desc': 'Como SCHEDULED, DEADLINE, CLOSED e :CREATED: são escritos. As duas formas são lidas.',
+  'settings.dates.iso': 'Só a data (2026-10-31)',
+  'settings.dates.weekday': 'Com o dia da semana (2026-10-31 sáb)',
   'settings.theme': 'Tema de cor',
   'settings.theme.desc':
     'As cores dos estados no visual Org e nos checkboxes. Cada tema tem o modo claro e o escuro à parte, então dá para usar um no modo do outro.',
