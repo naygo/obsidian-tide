@@ -6,6 +6,8 @@ const ptBR = {
   'command.priorityDown': 'Diminuir prioridade da tarefa',
   'command.newList': 'Nova lista',
   'command.newHabit': 'Novo hábito',
+  'command.newContext': 'Novo contexto',
+  'command.declareContext': 'Declarar contexto',
   'command.openWeek': 'Abrir esta semana',
   'command.openMonth': 'Abrir este mês',
   'command.openYear': 'Abrir este ano',
@@ -74,6 +76,11 @@ const ptBR = {
   'newNote.invalid': 'Não foi possível criar a nota com esse nome.',
   // the habit's name is the key of its mark in the daily's frontmatter, so it can't clash with another property
   'newHabit.used': 'Esse nome já é uma propriedade usada no vault.',
+  // Declare context: the interval its line pauses the habits of the context's pause
+  'declare.label': 'Intervalo (2026-11-01 → 2026-11-07, ou um dia)',
+  'declare.add': 'Declarar',
+  'declare.invalid': 'Intervalo inválido: use 2026-11-01 → 2026-11-07, ou uma data só.',
+  'declare.empty': 'Este contexto não tem hábitos em pause.',
   // the tide-habits block: a future day shows its habits read-only
   'habits.future': 'Dia futuro: só leitura',
   // the habits not planned on the day, folded below the planned ones
@@ -91,6 +98,8 @@ const ptBR = {
   'settings.listMarker.desc': 'Propriedade e valor (como categories: [[lists]]) ou o nome de uma pasta.',
   'settings.habitMarker': 'Marcador de hábito',
   'settings.habitMarker.desc': 'Propriedade e valor (como categories: [[habits]]) ou o nome de uma pasta.',
+  'settings.contextMarker': 'Marcador de contexto',
+  'settings.contextMarker.desc': 'Propriedade e valor (como categories: [[contexts]]) ou o nome de uma pasta.',
   'settings.visual': 'Visual das tarefas',
   'settings.visual.desc':
     'No Live Preview. Org: o texto colorido. Padrão: o checkbox do Obsidian, com os detalhes recolhidos num resumo.',

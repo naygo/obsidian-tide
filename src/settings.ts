@@ -7,7 +7,7 @@ import type { PeriodSettings } from './periods'
 
 /** What the settings tab saves; the days come from the core Daily notes instead. */
 export type TideSettings = Omit<PlaceSettings, 'dayOf'> &
-  PeriodSettings & { habitMarker: string; visual: Visual; theme: Theme }
+  PeriodSettings & { habitMarker: string; contextMarker: string; visual: Visual; theme: Theme }
 
 /** The color themes; each has a light and a dark variant, picked by Obsidian's mode in styles.css. */
 export const THEMES = ['obsidian', 'doom-one', 'gruvbox', 'solarized', 'catppuccin'] as const
@@ -18,12 +18,13 @@ export const DEFAULT_SETTINGS: TideSettings = {
   inbox: 'inbox.md',
   listMarker: 'categories: [[lists]]',
   habitMarker: 'categories: [[habits]]',
+  contextMarker: 'categories: [[contexts]]',
   templatesFolder: 'templates',
   visual: 'org',
   theme: 'obsidian',
 }
 
-const PATHS = ['periodsFolder', 'inbox', 'listMarker', 'habitMarker', 'templatesFolder'] as const
+const PATHS = ['periodsFolder', 'inbox', 'listMarker', 'habitMarker', 'contextMarker', 'templatesFolder'] as const
 
 export class TideSettingTab extends PluginSettingTab {
   constructor(
@@ -119,7 +120,7 @@ export class TextModal extends Modal {
   }
 }
 
-/** Creates a list or habit note with the configured marker and opens it. */
+/** Creates a list, habit or context note with the configured marker and opens it. */
 export async function createMarked(app: App, marker: string, name: string) {
   const m = parseMarker(marker)
   const path = normalizePath('folder' in m ? `${m.folder}/${name}.md` : `${name}.md`)

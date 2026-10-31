@@ -1,10 +1,11 @@
-import { type App, MarkdownRenderChild, setIcon } from 'obsidian'
+import { type App, type Events, MarkdownRenderChild, setIcon } from 'obsidian'
 import { type Habit, amountOf, isMarked, plannedOn, progress, setAmount, toggleMark } from './habits'
 import { t } from './i18n'
 
 /**
  * The tide-habits block of a daily: the habits planned on its weekday, and the others folded below, since a mark off
- * the planned days counts the same. A tap marks a yes/no habit; a habit with a unit takes a number.
+ * the planned days counts the same; a habit a context pauses on the day is in neither. A tap marks a yes/no habit; a
+ * habit with a unit takes a number.
  */
 export class HabitsBlock extends MarkdownRenderChild {
   /** kept across renders, so marking a habit among the others doesn't fold them away */
@@ -21,6 +22,10 @@ export class HabitsBlock extends MarkdownRenderChild {
     /** the amount of each daily by date, for the goal's progress */
     private amounts: (habit: Habit) => Record<string, number>,
     private mark: (date: string, edit: (fm: Record<string, unknown>) => void) => void,
+    /** the lowercased names of the habits paused on a date */
+    private paused: (date: string) => Set<string>,
+    /** fires 'changed' after any note's metadata or text is read again, so a mark or a declaration redraws */
+    private changes: Events,
   ) {
     super(el)
   }
@@ -28,7 +33,7 @@ export class HabitsBlock extends MarkdownRenderChild {
   onload() {
     // ponytail: any note's metadata redraws every open block; filter to the dailies and the habits if it lags,
     // keeping the other dailies of a goal's period, whose marks its progress sums
-    this.registerEvent(this.app.metadataCache.on('changed', () => this.render()))
+    this.registerEvent(this.changes.on('changed', () => this.render()))
     this.render()
   }
 
@@ -36,7 +41,8 @@ export class HabitsBlock extends MarkdownRenderChild {
     this.containerEl.empty()
     const date = this.day()
     if (!date) return
-    const habits = this.habits().filter((h) => !h.archived)
+    const paused = this.paused(date)
+    const habits = this.habits().filter((h) => !h.archived && !paused.has(h.name.toLowerCase()))
     const planned = habits.filter((h) => plannedOn(h, date))
     const others = habits.filter((h) => !plannedOn(h, date))
     if (!habits.length) return

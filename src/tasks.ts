@@ -12,6 +12,7 @@ import { type Change, orgAction } from './actions'
 import { type AgendaEntry, agenda } from './agenda'
 import { monthWeeks, shiftMonth } from './calendar'
 import { type Vocabulary, vocabulary } from './complete'
+import { type Declaration, declarationsIn } from './contexts'
 import { type MessageKey, t } from './i18n'
 import {
   type Place,
@@ -48,6 +49,8 @@ export class TaskIndex extends Events {
   private tasks = new Map<string, ListedTask[]>()
   /** the events on the ladder, for the agenda: they never count as work */
   private eventsOf = new Map<string, ListedTask[]>()
+  /** the declaration lines of every note; only a context's count, decided by the marker when read */
+  private declarationsOf = new Map<string, Declaration[]>()
 
   constructor(
     private app: App,
@@ -61,6 +64,7 @@ export class TaskIndex extends Events {
     this.words.clear()
     this.tasks.clear()
     this.eventsOf.clear()
+    this.declarationsOf.clear()
     for (const file of this.app.vault.getMarkdownFiles()) {
       // a file deleted mid-scan must not stop the rest of the vault from being indexed
       const data = await this.app.vault.cachedRead(file).catch(() => null)
@@ -79,7 +83,8 @@ export class TaskIndex extends Events {
     const listed = this.tasks.delete(path)
     const dated = this.files.delete(path)
     const events = this.eventsOf.delete(path)
-    if (this.undated.delete(path) || dated || listed || events) this.trigger('changed')
+    const declared = this.declarationsOf.delete(path)
+    if (this.undated.delete(path) || dated || listed || events || declared) this.trigger('changed')
   }
 
   /** The files holding pending tasks on `today`, and how many blocks each would migrate. */
@@ -111,6 +116,11 @@ export class TaskIndex extends Events {
     }
   }
 
+  /** The declaration lines of the note at `path`. */
+  declarations(path: string): Declaration[] {
+    return this.declarationsOf.get(path) ?? []
+  }
+
   /** Every task of the vault, once each. */
   all(): ListedTask[] {
     return [...this.tasks.values()].flat()
@@ -129,6 +139,9 @@ export class TaskIndex extends Events {
     this.eventsOf.delete(file.path)
     const lines = data.split('\n')
     this.words.set(file.path, vocabulary(lines))
+    const declarations = declarationsIn(lines)
+    if (declarations.length) this.declarationsOf.set(file.path, declarations)
+    else this.declarationsOf.delete(file.path)
     const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter ?? null
     const home = placeOf(file.path, frontmatter, this.settings())
     const found = tasksIn(lines)

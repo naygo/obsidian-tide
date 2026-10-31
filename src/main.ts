@@ -18,6 +18,7 @@ import { type Action, type Change, diffLines, findBlock, orgAction } from './act
 import { foldTasks, tideEditor } from './editor'
 import { type Habit, amountOf, habitOf, propertyUsed } from './habits'
 import { HabitsBlock } from './habitViews'
+import { declarationLine, parseInterval, pausedOn } from './contexts'
 import { type SuggestContext, type Suggestion, type Suggestions, orgSuggest } from './complete'
 import { type MessageKey, t } from './i18n'
 import {
@@ -458,6 +459,26 @@ export default class TidePlugin extends Plugin {
       .sort((a, b) => a.name.localeCompare(b.name))
   }
 
+  /** The habits paused on `date` by the declarations of every context note. */
+  private paused(date: string): Set<string> {
+    const contexts = this.app.vault
+      .getMarkdownFiles()
+      .filter((f) => hasMarker(f.path, this.frontmatter(f), this.settings.contextMarker))
+    return pausedOn(
+      contexts.flatMap((f) => this.index.declarations(f.path)),
+      date,
+    )
+  }
+
+  /** Appends a declaration of the context with its `pause` as it is now; the line never changes after. */
+  private async declareContext(file: TFile, interval: string) {
+    const range = parseInterval(interval)
+    if (!range) return void new Notice(t('declare.invalid'))
+    const line = declarationLine(range.from, range.to, this.frontmatter(file)?.pause)
+    if (!line) return void new Notice(t('declare.empty'))
+    await this.app.vault.process(file, (d) => appendBlock(d, [line]))
+  }
+
   private frontmatter(file: TFile): Record<string, unknown> | null {
     return this.app.metadataCache.getFileCache(file)?.frontmatter ?? null
   }
@@ -535,7 +556,8 @@ export default class TidePlugin extends Plugin {
       const habits = () => this.habits()
       const amounts = (habit: Habit) => this.habitAmounts(habit)
       const mark = (date: string, edit: (fm: Record<string, unknown>) => void) => void this.markHabit(date, edit)
-      ctx.addChild(new HabitsBlock(el, this.app, ctx.sourcePath, day, habits, today, amounts, mark))
+      const paused = (date: string) => this.paused(date)
+      ctx.addChild(new HabitsBlock(el, this.app, ctx.sourcePath, day, habits, today, amounts, mark, paused, this.index))
     })
     // the daily is born on startup, on coming back to the app and at midnight with the app open
     this.app.workspace.onLayoutReady(() => void this.createDaily())
@@ -656,6 +678,33 @@ export default class TidePlugin extends Plugin {
           { title: t('command.newHabit'), label: t('newNote.name'), button: t('newNote.create') },
           (name) => void this.createHabit(name),
         ).open(),
+    })
+
+    this.addCommand({
+      id: 'new-context',
+      name: t('command.newContext'),
+      callback: () =>
+        new TextModal(
+          this.app,
+          { title: t('command.newContext'), label: t('newNote.name'), button: t('newNote.create') },
+          (name) => void createMarked(this.app, this.settings.contextMarker, name),
+        ).open(),
+    })
+
+    // on the context note open: its pause is copied into a new line at the end, never into an existing one
+    this.addCommand({
+      id: 'declare-context',
+      name: t('command.declareContext'),
+      checkCallback: (checking) => {
+        const file = this.app.workspace.getActiveFile()
+        const context = file && hasMarker(file.path, this.frontmatter(file), this.settings.contextMarker) ? file : null
+        if (checking || !context) return !!context
+        new TextModal(
+          this.app,
+          { title: t('command.declareContext'), label: t('declare.label'), button: t('declare.add') },
+          (interval) => void this.declareContext(context, interval),
+        ).open()
+      },
     })
 
     // no default hotkey either; the same capture from outside: obsidian://tide-capture?text=…
