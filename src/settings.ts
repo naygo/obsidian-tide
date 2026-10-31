@@ -1,4 +1,4 @@
-import { type App, Modal, Notice, normalizePath, PluginSettingTab, Setting } from 'obsidian'
+import { type App, Modal, Notice, normalizePath, PluginSettingTab, Setting, type SettingDefinitionItem } from 'obsidian'
 import type { Visual } from './editor'
 import { t } from './i18n'
 import { type PlaceSettings, parseMarker } from './ladder'
@@ -21,6 +21,8 @@ export const DEFAULT_SETTINGS: TideSettings = {
   theme: 'obsidian',
 }
 
+const PATHS = ['periodsFolder', 'inbox', 'listMarker', 'templatesFolder'] as const
+
 export class TideSettingTab extends PluginSettingTab {
   constructor(
     app: App,
@@ -29,49 +31,57 @@ export class TideSettingTab extends PluginSettingTab {
     super(app, plugin)
   }
 
+  /** Also what makes the settings show in Obsidian's settings search, from 1.13 on. */
+  getSettingDefinitions(): SettingDefinitionItem<keyof TideSettings>[] {
+    const paths = PATHS.map((key) => ({
+      name: t(`settings.${key}`),
+      desc: t(`settings.${key}.desc`),
+      control: { type: 'text' as const, key, placeholder: DEFAULT_SETTINGS[key] },
+    }))
+    const dropdown = (key: 'visual' | 'theme', options: Record<string, string>) => ({
+      name: t(`settings.${key}`),
+      desc: t(`settings.${key}.desc`),
+      control: { type: 'dropdown' as const, key, options },
+    })
+    return [
+      ...paths,
+      dropdown('visual', { org: t('settings.visual.org'), standard: t('settings.visual.standard') }),
+      dropdown('theme', Object.fromEntries(THEMES.map((theme) => [theme, t(`settings.theme.${theme}`)]))),
+    ]
+  }
+
+  getControlValue(key: string): unknown {
+    return this.plugin.settings[key as keyof TideSettings]
+  }
+
+  /** Paths are stored as vault paths, so `inbox` and `/inbox.md` both match inbox.md. */
+  async setControlValue(key: string, value: unknown) {
+    const v = String(value).trim()
+    const path = (PATHS as readonly string[]).includes(key) && key !== 'listMarker' && v
+    const stored = path ? normalizePath(key === 'inbox' && !v.endsWith('.md') ? v + '.md' : v) : v
+    Object.assign(this.plugin.settings, { [key]: stored })
+    await this.plugin.saveSettings()
+  }
+
+  /** Before 1.13, Obsidian calls this instead: the same definitions, drawn by hand. */
   display() {
     this.containerEl.empty()
-    for (const key of ['periodsFolder', 'inbox', 'listMarker', 'templatesFolder'] as const) {
-      new Setting(this.containerEl)
-        .setName(t(`settings.${key}`))
-        .setDesc(t(`settings.${key}.desc`))
-        .addText((text) =>
+    for (const def of this.getSettingDefinitions()) {
+      if (!('control' in def) || !def.control) continue
+      const { control } = def
+      const value = String(this.getControlValue(control.key))
+      const setting = new Setting(this.containerEl).setName(def.name).setDesc(def.desc ?? '')
+      const save = (v: string) => void this.setControlValue(control.key, v)
+      if (control.type === 'text')
+        setting.addText((text) =>
           text
-            .setPlaceholder(DEFAULT_SETTINGS[key])
-            .setValue(this.plugin.settings[key])
-            .onChange(async (value) => {
-              // stored as vault paths, so `inbox` and `/inbox.md` both match inbox.md
-              const v = value.trim()
-              this.plugin.settings[key] =
-                key === 'listMarker' || !v ? v : normalizePath(key === 'inbox' && !v.endsWith('.md') ? v + '.md' : v)
-              await this.plugin.saveSettings()
-            }),
+            .setPlaceholder(control.placeholder ?? '')
+            .setValue(value)
+            .onChange(save),
         )
+      if (control.type === 'dropdown')
+        setting.addDropdown((d) => d.addOptions(control.options).setValue(value).onChange(save))
     }
-    new Setting(this.containerEl)
-      .setName(t('settings.visual'))
-      .setDesc(t('settings.visual.desc'))
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOptions({ org: t('settings.visual.org'), standard: t('settings.visual.standard') })
-          .setValue(this.plugin.settings.visual)
-          .onChange(async (value) => {
-            this.plugin.settings.visual = value as Visual
-            await this.plugin.saveSettings()
-          }),
-      )
-    new Setting(this.containerEl)
-      .setName(t('settings.theme'))
-      .setDesc(t('settings.theme.desc'))
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOptions(Object.fromEntries(THEMES.map((theme) => [theme, t(`settings.theme.${theme}`)])))
-          .setValue(this.plugin.settings.theme)
-          .onChange(async (value) => {
-            this.plugin.settings.theme = value as Theme
-            await this.plugin.saveSettings()
-          }),
-      )
   }
 }
 
