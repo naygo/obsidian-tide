@@ -1,6 +1,8 @@
-/* an empty tide-tasks block takes no space, in reading view and in live preview */
+/* an empty tide-tasks or tide-habits block takes no space, in reading view and in live preview */
 .el-pre:has(> .block-language-tide-tasks:empty),
-.cm-embed-block:has(> .block-language-tide-tasks:empty) {
+.cm-embed-block:has(> .block-language-tide-tasks:empty),
+.el-pre:has(> .block-language-tide-habits:empty),
+.cm-embed-block:has(> .block-language-tide-habits:empty) {
   display: none;
 }
 
@@ -310,4 +312,45 @@ body.tide-theme-catppuccin.theme-light {
 .tide-calendar a.tide-calendar-today {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
+}
+
+/* the tide-habits block: one checkbox per habit planned on the day, in the habit's color */
+.tide-habits {
+  list-style: none;
+  padding-inline-start: 0;
+}
+
+.tide-habit {
+  display: inline-flex;
+  gap: var(--size-4-2);
+  align-items: center;
+}
+
+.tide-habit-icon {
+  display: inline-flex;
+}
+
+.tide-habit-red {
+  color: var(--color-red);
+}
+.tide-habit-orange {
+  color: var(--color-orange);
+}
+.tide-habit-yellow {
+  color: var(--color-yellow);
+}
+.tide-habit-green {
+  color: var(--color-green);
+}
+.tide-habit-cyan {
+  color: var(--color-cyan);
+}
+.tide-habit-blue {
+  color: var(--color-blue);
+}
+.tide-habit-purple {
+  color: var(--color-purple);
+}
+.tide-habit-pink {
+  color: var(--color-pink);
 }

@@ -16,6 +16,8 @@ import {
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { foldTasks, tideEditor } from './editor'
+import { type Habit, habitOf, propertyUsed, toggleMark } from './habits'
+import { HabitsBlock } from './habitViews'
 import { type SuggestContext, type Suggestion, type Suggestions, orgSuggest } from './complete'
 import { type MessageKey, t } from './i18n'
 import {
@@ -23,6 +25,7 @@ import {
   type Place,
   type PlaceSettings,
   firstDay,
+  hasMarker,
   holds,
   isoWeek,
   offRule,
@@ -33,7 +36,7 @@ import {
 import { migrate, moveBlock } from './move'
 import { captureLine, parseBlock } from './org'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
-import { DEFAULT_SETTINGS, THEMES, TextModal, type TideSettings, TideSettingTab, createList } from './settings'
+import { DEFAULT_SETTINGS, THEMES, TextModal, type TideSettings, TideSettingTab, createMarked } from './settings'
 import {
   AGENDA_VIEW,
   AgendaView,
@@ -311,7 +314,7 @@ export default class TidePlugin extends Plugin {
       .getMarkdownFiles()
       .filter((f) => f.path !== this.settings.inbox)
       .flatMap((f) => {
-        const place = placeOf(f.path, this.app.metadataCache.getFileCache(f)?.frontmatter ?? null, this.places())
+        const place = placeOf(f.path, this.frontmatter(f), this.places())
         return place?.kind === 'list' ? [{ label: f.basename, place }] : []
       })
     return [...fixed.map(([label, place]) => ({ label: t(label), place })), ...lists]
@@ -319,7 +322,7 @@ export default class TidePlugin extends Plugin {
 
   /** The place of a file on the ladder, or null off it. */
   private placeOfFile(file: TFile): Place | null {
-    return placeOf(file.path, this.app.metadataCache.getFileCache(file)?.frontmatter ?? null, this.places())
+    return placeOf(file.path, this.frontmatter(file), this.places())
   }
 
   /** The block at the cursor when it is off the rule, and why. */
@@ -419,7 +422,7 @@ export default class TidePlugin extends Plugin {
       const file = fileAt(this.app, path)
       if (!file) continue
       const data = await this.app.vault.read(file)
-      const home = placeOf(path, this.app.metadataCache.getFileCache(file)?.frontmatter ?? null, this.places())
+      const home = placeOf(path, this.frontmatter(file), this.places())
       const result = home && migrate(data.split('\n'), home, now)
       if (!result) continue
       await this.app.vault.process(daily, (d) => appendBlock(d, result.moved))
@@ -444,6 +447,39 @@ export default class TidePlugin extends Plugin {
     }
     // a capture from the URI has no other copy of the text
     new Notice(written ? t('capture.done') : t('capture.failed') + line, written ? undefined : 0)
+  }
+
+  /** The notes carrying the habit marker, by name. */
+  private habits(): Habit[] {
+    return this.app.vault
+      .getMarkdownFiles()
+      .filter((f) => hasMarker(f.path, this.frontmatter(f), this.settings.habitMarker))
+      .map((f) => habitOf(f.path, this.frontmatter(f)))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  private frontmatter(file: TFile): Record<string, unknown> | null {
+    return this.app.metadataCache.getFileCache(file)?.frontmatter ?? null
+  }
+
+  /** Marks or unmarks the habit in the daily of `date`, created when missing; a future day is read-only. */
+  private async toggleHabit(date: string, habit: Habit) {
+    if (date > today()) return
+    const file = await this.day(date)
+    if (file)
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => toggleMark(fm, habit.name))
+  }
+
+  /** New habit: its name becomes a property of the dailies, so a name already used as a property is refused. */
+  private async createHabit(name: string) {
+    if (
+      propertyUsed(
+        name,
+        this.app.vault.getMarkdownFiles().map((f) => this.frontmatter(f)),
+      )
+    )
+      new Notice(t('newHabit.used'))
+    else await createMarked(this.app, this.settings.habitMarker, name)
   }
 
   /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
@@ -482,6 +518,11 @@ export default class TidePlugin extends Plugin {
     this.registerMarkdownCodeBlockProcessor('tide-tasks', (_source, el, ctx) => {
       const place = () => placeOf(ctx.sourcePath, null, this.places())
       ctx.addChild(new TasksBlock(el, this.app, this.index, place, today, () => void this.migratePending()))
+    })
+    this.registerMarkdownCodeBlockProcessor('tide-habits', (_source, el, ctx) => {
+      const day = () => dayOf(this.daily, ctx.sourcePath)
+      const toggle = (date: string, habit: Habit) => void this.toggleHabit(date, habit)
+      ctx.addChild(new HabitsBlock(el, this.app, ctx.sourcePath, day, () => this.habits(), today, toggle))
     })
     // the daily is born on startup, on coming back to the app and at midnight with the app open
     this.app.workspace.onLayoutReady(() => void this.createDaily())
@@ -588,8 +629,19 @@ export default class TidePlugin extends Plugin {
       callback: () =>
         new TextModal(
           this.app,
-          { title: t('command.newList'), label: t('newList.name'), button: t('newList.create') },
-          (name) => void createList(this.app, this.settings.listMarker, name),
+          { title: t('command.newList'), label: t('newNote.name'), button: t('newNote.create') },
+          (name) => void createMarked(this.app, this.settings.listMarker, name),
+        ).open(),
+    })
+
+    this.addCommand({
+      id: 'new-habit',
+      name: t('command.newHabit'),
+      callback: () =>
+        new TextModal(
+          this.app,
+          { title: t('command.newHabit'), label: t('newNote.name'), button: t('newNote.create') },
+          (name) => void this.createHabit(name),
         ).open(),
     })
 

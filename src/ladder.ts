@@ -25,7 +25,7 @@ export function placeOf(path: string, frontmatter: Record<string, unknown> | nul
   if (day) return { kind: 'day', key: day }
   const period = periodOf(path, s.periodsFolder)
   if (period) return period
-  return path === s.inbox || isList(path, frontmatter, s.listMarker) ? { kind: 'list', key: path } : null
+  return path === s.inbox || hasMarker(path, frontmatter, s.listMarker) ? { kind: 'list', key: path } : null
 }
 
 /** The week, month or year file at `path`, looked for in the periods folder. */
@@ -43,7 +43,8 @@ export function parseMarker(marker: string): { property: string; value: string }
   return m ? { property: m[1].trim(), value: m[2].trim() } : { folder: marker.replace(/\/+$/, '') }
 }
 
-function isList(path: string, frontmatter: Record<string, unknown> | null, marker: string): boolean {
+/** Whether the note carries the marker of a list or a habit: the property's value, or a place in the folder. */
+export function hasMarker(path: string, frontmatter: Record<string, unknown> | null, marker: string): boolean {
   const m = parseMarker(marker)
   if ('folder' in m) return path.startsWith(m.folder + '/')
   const target = linkName(m.value)

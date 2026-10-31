@@ -6,7 +6,8 @@ import type TidePlugin from './main'
 import type { PeriodSettings } from './periods'
 
 /** What the settings tab saves; the days come from the core Daily notes instead. */
-export type TideSettings = Omit<PlaceSettings, 'dayOf'> & PeriodSettings & { visual: Visual; theme: Theme }
+export type TideSettings = Omit<PlaceSettings, 'dayOf'> &
+  PeriodSettings & { habitMarker: string; visual: Visual; theme: Theme }
 
 /** The color themes; each has a light and a dark variant, picked by Obsidian's mode in styles.css. */
 export const THEMES = ['obsidian', 'doom-one', 'gruvbox', 'solarized', 'catppuccin'] as const
@@ -16,12 +17,13 @@ export const DEFAULT_SETTINGS: TideSettings = {
   periodsFolder: '',
   inbox: 'inbox.md',
   listMarker: 'categories: [[lists]]',
+  habitMarker: 'categories: [[habits]]',
   templatesFolder: 'templates',
   visual: 'org',
   theme: 'obsidian',
 }
 
-const PATHS = ['periodsFolder', 'inbox', 'listMarker', 'templatesFolder'] as const
+const PATHS = ['periodsFolder', 'inbox', 'listMarker', 'habitMarker', 'templatesFolder'] as const
 
 export class TideSettingTab extends PluginSettingTab {
   constructor(
@@ -54,10 +56,10 @@ export class TideSettingTab extends PluginSettingTab {
     return this.plugin.settings[key as keyof TideSettings]
   }
 
-  /** Paths are stored as vault paths, so `inbox` and `/inbox.md` both match inbox.md. */
+  /** Paths are stored as vault paths, so `inbox` and `/inbox.md` both match inbox.md; a marker stays as typed. */
   async setControlValue(key: string, value: unknown) {
     const v = String(value).trim()
-    const path = (PATHS as readonly string[]).includes(key) && key !== 'listMarker' && v
+    const path = (PATHS as readonly string[]).includes(key) && !key.endsWith('Marker') && v
     const stored = path ? normalizePath(key === 'inbox' && !v.endsWith('.md') ? v + '.md' : v) : v
     Object.assign(this.plugin.settings, { [key]: stored })
     await this.plugin.saveSettings()
@@ -117,12 +119,12 @@ export class TextModal extends Modal {
   }
 }
 
-/** Creates the list note with the configured marker and opens it. */
-export async function createList(app: App, marker: string, name: string) {
+/** Creates a list or habit note with the configured marker and opens it. */
+export async function createMarked(app: App, marker: string, name: string) {
   const m = parseMarker(marker)
   const path = normalizePath('folder' in m ? `${m.folder}/${name}.md` : `${name}.md`)
   if (app.vault.getAbstractFileByPath(path)) {
-    new Notice(t('newList.exists'))
+    new Notice(t('newNote.exists'))
     return
   }
   const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
@@ -131,7 +133,7 @@ export async function createList(app: App, marker: string, name: string) {
   try {
     file = await app.vault.create(path, '')
   } catch {
-    new Notice(t('newList.invalid'))
+    new Notice(t('newNote.invalid'))
     return
   }
   if ('property' in m) {
