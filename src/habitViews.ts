@@ -123,7 +123,7 @@ export class HabitsView extends ItemView {
     leaf: WorkspaceLeaf,
     private habits: () => Habit[],
     /** the frontmatter of each daily by date */
-    private marks: () => Record<string, Record<string, unknown>>,
+    private frontmatters: () => Record<string, Record<string, unknown>>,
     private today: () => string,
     private mark: (date: string, edit: (fm: Record<string, unknown>) => void) => void,
     /** fires 'changed' after any note's metadata is read again, and on a new day */
@@ -156,8 +156,9 @@ export class HabitsView extends ItemView {
   }
 
   private render() {
-    // a number being typed keeps its field: the field redraws the board itself once it commits or loses focus
-    if (document.activeElement?.hasClass('tide-board-field') && this.contentEl.contains(document.activeElement)) return
+    // a number being typed keeps its field; the write it commits redraws the board after
+    const focused = this.contentEl.doc.activeElement
+    if (focused?.hasClass('tide-board-field') && this.contentEl.contains(focused)) return
     this.contentEl.empty()
     const today = this.today()
     const nav = this.contentEl.createDiv({ cls: 'tide-calendar-nav' })
@@ -169,13 +170,13 @@ export class HabitsView extends ItemView {
     const habits = this.habits().filter((h) => !h.archived)
     if (!habits.length) return void this.contentEl.createDiv({ cls: 'tide-empty', text: t('habits.empty') })
     const days = monthDays(this.month)
-    const marks = this.marks()
+    const frontmatters = this.frontmatters()
     const table = this.contentEl.createDiv({ cls: 'tide-board-scroll' }).createEl('table', { cls: 'tide-board' })
     const head = table.createEl('thead').createEl('tr')
     head.createEl('th')
     const body = table.createEl('tbody')
     const cell = (tr: HTMLElement, habit: Habit, date: string) =>
-      this.cell(tr.createEl('td'), habit, date, marks[date], today)
+      this.fill(tr.createEl('td'), habit, date, frontmatters[date], today)
     if (Platform.isPhone) {
       for (const habit of habits) this.habitName(head.createEl('th'), habit)
       for (const date of days) {
@@ -204,11 +205,13 @@ export class HabitsView extends ItemView {
     if (date === today) th.addClass('tide-board-today')
   }
 
-  private cell(td: HTMLElement, habit: Habit, date: string, fm: Record<string, unknown> | undefined, today: string) {
+  private fill(td: HTMLElement, habit: Habit, date: string, fm: Record<string, unknown> | undefined, today: string) {
     td.setAttr('aria-label', `${habit.name} ${date}`)
     if (date > today) {
+      // a tooltip never shows on a phone, so the cell says it too
       td.addClass('tide-board-ahead')
       td.setAttr('title', t('habits.ahead'))
+      td.setText('·')
       return
     }
     if (!plannedOn(habit, date)) td.addClass('tide-board-off')
@@ -222,17 +225,19 @@ export class HabitsView extends ItemView {
     const button = td.createEl('button', { cls: 'tide-board-amount', text: amount ? String(amount) : '' })
     button.addEventListener('click', () => {
       button.remove()
-      const field = td.createEl('input', { type: 'number', cls: 'tide-habit-amount tide-board-field' })
+      const field = createEl('input', { type: 'number', cls: 'tide-habit-amount tide-board-field' })
       field.min = '0'
       field.inputMode = 'decimal'
       field.value = amount ? String(amount) : ''
-      field.addEventListener('change', () => {
-        const n = Number(field.value)
-        field.blur()
-        this.mark(date, (f) => setAmount(f, habit.name, n))
+      field.addEventListener('change', () => this.mark(date, (f) => setAmount(f, habit.name, Number(field.value))))
+      // Enter commits and Escape cancels, both by leaving the field, which fires change only on a new value
+      field.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') field.value = amount ? String(amount) : ''
+        if (e.key === 'Enter' || e.key === 'Escape') field.blur()
       })
-      // leaving without a change puts the cell back
-      field.addEventListener('blur', () => this.render())
+      // the button back in place rather than a redraw, which would swallow the click that took the focus away
+      field.addEventListener('blur', () => field.replaceWith(button))
+      td.appendChild(field)
       field.focus()
     })
   }

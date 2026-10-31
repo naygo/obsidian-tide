@@ -356,6 +356,7 @@ body.tide-theme-catppuccin.theme-light {
 
 .tide-board td.tide-board-ahead {
   background: var(--background-modifier-hover);
+  color: var(--text-faint);
 }
 
 .tide-board-amount {

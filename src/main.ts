@@ -578,10 +578,11 @@ export default class TidePlugin extends Plugin {
   }
 
   /** The frontmatter of each daily, by date. */
-  private dailyMarks(): Record<string, Record<string, unknown>> {
-    const marks: Record<string, Record<string, unknown>> = {}
-    for (const f of this.dailies()) marks[dayOf(this.daily, f.path)!] = this.frontmatter(f) ?? {}
-    return marks
+  private dailyFrontmatters(): Record<string, Record<string, unknown>> {
+    // ponytail: scans every daily's cached frontmatter on each render of the board; index the dailies if it lags
+    const frontmatters: Record<string, Record<string, unknown>> = {}
+    for (const f of this.dailies()) frontmatters[dayOf(this.daily, f.path)!] = this.frontmatter(f) ?? {}
+    return frontmatters
   }
 
   /** The habit's amount in each daily that has it, by date. */
@@ -754,7 +755,7 @@ export default class TidePlugin extends Plugin {
         new HabitsView(
           leaf,
           () => this.habits(),
-          () => this.dailyMarks(),
+          () => this.dailyFrontmatters(),
           today,
           (date, edit) => void this.markHabit(date, edit),
           this.index,
