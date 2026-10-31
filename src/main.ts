@@ -12,6 +12,7 @@ import {
   editorInfoField,
   moment,
   normalizePath,
+  Notice,
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { foldTasks, tideEditor } from './editor'
@@ -30,9 +31,9 @@ import {
   placeOf,
 } from './ladder'
 import { migrate, moveBlock } from './move'
-import { parseBlock } from './org'
+import { captureLine, parseBlock } from './org'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
-import { DEFAULT_SETTINGS, NewListModal, THEMES, type TideSettings, TideSettingTab } from './settings'
+import { DEFAULT_SETTINGS, THEMES, TextModal, type TideSettings, TideSettingTab, createList } from './settings'
 import {
   AGENDA_VIEW,
   AgendaView,
@@ -427,6 +428,24 @@ export default class TidePlugin extends Plugin {
     }
   }
 
+  /** Appends `text` as a task at the end of the Inbox, created when missing; the text is never lost silently. */
+  private async capture(text: string) {
+    const line = captureLine(text)
+    if (!line) return
+    let written = false
+    try {
+      const file = await this.destination({ kind: 'list', key: this.settings.inbox })
+      if (file) {
+        await this.app.vault.process(file, (d) => appendBlock(d, [line]))
+        written = true
+      }
+    } catch {
+      // a failed create or write leaves written false, so the notice below keeps the text
+    }
+    // a capture from the URI has no other copy of the text
+    new Notice(written ? t('capture.done') : t('capture.failed') + line, written ? undefined : 0)
+  }
+
   /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
   async period(key: string): Promise<TFile | null> {
     const note = periodNote(key, this.settings)
@@ -566,8 +585,26 @@ export default class TidePlugin extends Plugin {
     this.addCommand({
       id: 'new-list',
       name: t('command.newList'),
-      callback: () => new NewListModal(this.app, this.settings).open(),
+      callback: () =>
+        new TextModal(
+          this.app,
+          { title: t('command.newList'), label: t('newList.name'), button: t('newList.create') },
+          (name) => void createList(this.app, this.settings.listMarker, name),
+        ).open(),
     })
+
+    // no default hotkey either; the same capture from outside: obsidian://tide-capture?text=…
+    this.addCommand({
+      id: 'capture',
+      name: t('command.capture'),
+      callback: () =>
+        new TextModal(
+          this.app,
+          { title: t('command.capture'), label: t('capture.label'), button: t('capture.add') },
+          (text) => void this.capture(text),
+        ).open(),
+    })
+    this.registerObsidianProtocolHandler('tide-capture', (params) => void this.capture(params.text ?? ''))
 
     this.registerEditorExtension(
       Prec.highest(

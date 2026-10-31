@@ -85,30 +85,31 @@ export class TideSettingTab extends PluginSettingTab {
   }
 }
 
-/** Asks for a name and creates the list note with the configured marker. */
-export class NewListModal extends Modal {
+/** Asks for one line of text and hands it over trimmed; blank text does nothing. */
+export class TextModal extends Modal {
   constructor(
     app: App,
-    private settings: TideSettings,
+    private texts: { title: string; label: string; button: string },
+    private onSubmit: (text: string) => void,
   ) {
     super(app)
   }
 
   onOpen() {
-    this.setTitle(t('command.newList'))
-    let name = ''
+    this.setTitle(this.texts.title)
+    let value = ''
     const submit = () => {
-      if (!name.trim()) return
+      if (!value.trim()) return
       this.close()
-      void createList(this.app, this.settings.listMarker, name.trim())
+      this.onSubmit(value.trim())
     }
-    new Setting(this.contentEl).setName(t('newList.name')).addText((text) => {
-      text.onChange((v) => (name = v))
+    new Setting(this.contentEl).setName(this.texts.label).addText((text) => {
+      text.onChange((v) => (value = v))
       text.inputEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') submit()
       })
     })
-    new Setting(this.contentEl).addButton((b) => b.setButtonText(t('newList.create')).setCta().onClick(submit))
+    new Setting(this.contentEl).addButton((b) => b.setButtonText(this.texts.button).setCta().onClick(submit))
   }
 
   onClose() {
@@ -116,7 +117,8 @@ export class NewListModal extends Modal {
   }
 }
 
-async function createList(app: App, marker: string, name: string) {
+/** Creates the list note with the configured marker and opens it. */
+export async function createList(app: App, marker: string, name: string) {
   const m = parseMarker(marker)
   const path = normalizePath('folder' in m ? `${m.folder}/${name}.md` : `${name}.md`)
   if (app.vault.getAbstractFileByPath(path)) {

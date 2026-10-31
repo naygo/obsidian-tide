@@ -65,6 +65,18 @@ export function parseHead(line: string) {
   }
 }
 
+/** The head line a quick capture appends: one line, a TODO unless TODO or DOING was typed. Null for blank text. */
+export function captureLine(text: string): string | null {
+  const rest = text
+    .replace(/\s*\n\s*/g, ' ')
+    .trim()
+    .replace(/^- /, '')
+  if (!rest) return null
+  // a DONE or CANCELED would need its CLOSED line, so only an open state is kept
+  const state = parseHead(`- ${rest}`)?.state
+  return state === 'TODO' || state === 'DOING' ? `- ${rest}` : `- TODO ${rest}`
+}
+
 export function parseBlock(lines: string[]): OrgBlock | null {
   const head = parseHead(lines[0])
   if (!head) return null

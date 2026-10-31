@@ -15,6 +15,7 @@ const ptBR = {
   'command.openList': 'Abrir lista de tarefas',
   'command.openAgenda': 'Abrir agenda',
   'command.openCalendar': 'Abrir calendário',
+  'command.capture': 'Capturar na Inbox',
   // the calendar view: the month navigation
   'calendar.title': 'Calendário',
   'calendar.prev': 'Mês anterior',
@@ -61,6 +62,11 @@ const ptBR = {
   'move.inbox': 'Inbox',
   // marks a task shown on its DEADLINE day in a tide-tasks block
   'block.deadline': 'prazo',
+  // quick capture: the modal of the command and the notices, also shown for the obsidian:// URI
+  'capture.label': 'Tarefa',
+  'capture.add': 'Capturar',
+  'capture.done': 'Capturado na Inbox.',
+  'capture.failed': 'Não foi possível escrever na Inbox: ',
   'newList.name': 'Nome',
   'newList.create': 'Criar',
   'newList.exists': 'Já existe uma nota com esse nome.',

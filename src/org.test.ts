@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseBlock, serializeBlock, shiftDate } from './org'
+import { captureLine, parseBlock, parseHead, serializeBlock, shiftDate } from './org'
 
 const SPEC_EXAMPLE = [
   '- TODO [#A] dentista :saude:casa:',
@@ -110,5 +110,38 @@ describe('shiftDate', () => {
     ['2028-02-29', '+4y', '2032-02-29'],
   ])('%s %s → %s', (date, repeater, next) => {
     expect(shiftDate(date, repeater)).toBe(next)
+  })
+})
+
+describe('captureLine', () => {
+  it('makes a TODO of plain text', () => {
+    expect(captureLine('comprar pão')).toBe('- TODO comprar pão')
+  })
+
+  it('keeps the org syntax typed with it', () => {
+    expect(parseHead(captureLine('[#A] dentista :saude:')!)).toMatchObject({
+      state: 'TODO',
+      priority: 'A',
+      title: 'dentista',
+      tags: ['saude'],
+    })
+  })
+
+  it('keeps a state or a dash already typed', () => {
+    expect(captureLine('DOING relatório')).toBe('- DOING relatório')
+    expect(captureLine('- TODO x')).toBe('- TODO x')
+    expect(captureLine('- x')).toBe('- TODO x')
+  })
+
+  it('takes a closed state as text, since it would need its CLOSED line', () => {
+    expect(captureLine('DONE x')).toBe('- TODO DONE x')
+  })
+
+  it('keeps it on one line', () => {
+    expect(captureLine('  ligar\n  para  ana \n')).toBe('- TODO ligar para  ana')
+  })
+
+  it('gives nothing for blank text', () => {
+    expect(captureLine(' \n ')).toBeNull()
   })
 })
