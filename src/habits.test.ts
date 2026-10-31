@@ -189,6 +189,7 @@ describe('pace', () => {
   it('gives what is done, what is left of the goal and the days left in its period, today included', () => {
     const gym = habitOf('gym.md', { goal: 3, goal_per: 'week' })
     expect(pace(gym, '2026-10-31', { '2026-10-26': 1, '2026-10-31': 1, '2026-10-19': 1 })).toEqual({
+      goal: { amount: 3, per: 'week' },
       done: 2,
       left: 1,
       daysLeft: 2,
@@ -205,7 +206,12 @@ describe('pace', () => {
 
   it('leaves nothing once the goal is met, however far past it', () => {
     const água = habitOf('água.md', { unit: 'copos', goal: 8, goal_per: 'day' })
-    expect(pace(água, '2026-10-31', { '2026-10-31': 10 })).toEqual({ done: 10, left: 0, daysLeft: 1 })
+    expect(pace(água, '2026-10-31', { '2026-10-31': 10 })).toEqual({
+      goal: { amount: 8, per: 'day' },
+      done: 10,
+      left: 0,
+      daysLeft: 1,
+    })
   })
 
   it('is null for a habit without a goal', () => {

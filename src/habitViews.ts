@@ -1,6 +1,6 @@
 import { type App, type Events, ItemView, MarkdownRenderChild, Platform, type WorkspaceLeaf, setIcon } from 'obsidian'
 import { monthDays, shiftMonth, yearWeeks } from './calendar'
-import type { Declaration } from './contexts'
+import { type Declaration, pausedBy } from './contexts'
 import { type Habit, amountOf, isMarked, orphanKeys, pace, plannedOn, progress, setAmount, toggleMark } from './habits'
 import { type MessageKey, t } from './i18n'
 
@@ -180,16 +180,9 @@ export class HabitsView extends ItemView {
     const head = table.createEl('thead').createEl('tr')
     head.createEl('th')
     const body = table.createEl('tbody')
-    const declared = this.contexts().flatMap((c) => c.declarations.map((d) => ({ ...d, context: c.name })))
-    /** the contexts that pause the habit on the date, its name matched lowercased as the links are */
-    const pausedBy = (habit: Habit, date: string) =>
-      declared
-        .filter(
-          (d) => d.from <= date && date <= d.to && d.habits.some((h) => h.toLowerCase() === habit.name.toLowerCase()),
-        )
-        .map((d) => d.context)
+    const contexts = this.contexts()
     const cell = (tr: HTMLElement, habit: Habit, date: string) =>
-      this.fill(tr.createEl('td'), habit, date, frontmatters[date], today, pausedBy(habit, date))
+      this.fill(tr.createEl('td'), habit, date, frontmatters[date], today, pausedBy(contexts, habit.name, date))
     if (Platform.isPhone) {
       for (const habit of habits) this.habitName(head.createEl('th'), habit)
       for (const date of days) {
@@ -214,10 +207,10 @@ export class HabitsView extends ItemView {
     if (paced.length) {
       this.contentEl.createEl('h4', { text: t('habits.pace') })
       const ul = this.contentEl.createEl('ul', { cls: 'tide-habits' })
-      for (const { habit, done, left, daysLeft } of paced) {
+      for (const { habit, goal, done, left, daysLeft } of paced) {
         const li = ul.createEl('li').createSpan({ cls: 'tide-habit' })
         this.habitName(li, habit)
-        const per = `${done}/${habit.goal!.amount} ${t(`habits.per.${habit.goal!.per}`)}`
+        const per = `${done}/${goal.amount} ${t(`habits.per.${goal.per}`)}`
         const days = `${daysLeft} ${t(daysLeft === 1 ? 'habits.pace.day' : 'habits.pace.days')}`
         li.createSpan({
           cls: 'tide-habit-goal',
@@ -226,7 +219,9 @@ export class HabitsView extends ItemView {
       }
     }
 
-    const touching = declared.filter((d) => d.from <= days[days.length - 1] && days[0] <= d.to)
+    const touching = contexts
+      .flatMap((c) => c.declarations.map((d) => ({ ...d, context: c.name })))
+      .filter((d) => d.from <= days[days.length - 1] && days[0] <= d.to)
     if (touching.length) {
       this.contentEl.createEl('h4', { text: t('habits.contexts') })
       const ul = this.contentEl.createEl('ul', { cls: 'tide-board-contexts' })
@@ -237,18 +232,19 @@ export class HabitsView extends ItemView {
     // ponytail: a year of cells per habit, drawn again on every change; draw only the grids in view if it lags
     const year = this.month.slice(0, 4)
     this.contentEl.createEl('h4', { text: `${t('habits.year')} ${year}` })
+    const yearDays = yearWeeks(year).flat()
     for (const habit of habits) {
       this.habitName(this.contentEl.createDiv({ cls: 'tide-year-name' }), habit)
       const grid = this.contentEl.createDiv({ cls: 'tide-board-scroll' }).createDiv({ cls: 'tide-year' })
       if (habit.color) grid.addClass(`tide-habit-${habit.color}`)
-      for (const date of yearWeeks(year).flat()) {
+      for (const date of yearDays) {
         const square = grid.createDiv({ cls: 'tide-year-day' })
         if (!date) {
           square.addClass('tide-year-out')
           continue
         }
         const amount = amountOf(frontmatters[date], habit.name)
-        const paused = pausedBy(habit, date)
+        const paused = pausedBy(contexts, habit.name, date)
         if (amount) square.addClass('tide-year-marked')
         if (paused.length) square.addClass('tide-year-paused')
         if (date > today) square.addClass('tide-year-ahead')
@@ -282,18 +278,19 @@ export class HabitsView extends ItemView {
     date: string,
     fm: Record<string, unknown> | undefined,
     today: string,
-    pausedBy: string[],
+    /** the contexts that pause the habit on the date */
+    paused: string[],
   ) {
     td.setAttr('aria-label', `${habit.name} ${date}`)
     // a pause shows ahead too, as declared days to come; a mark on a paused day counts the same
-    if (pausedBy.length) {
+    if (paused.length) {
       td.addClass('tide-board-paused')
-      td.setAttr('title', this.pausedText(pausedBy))
+      td.setAttr('title', this.pausedText(paused))
     }
     if (date > today) {
       // a tooltip never shows on a phone, so the cell says it too
       td.addClass('tide-board-ahead')
-      td.setAttr('title', t('habits.ahead'))
+      td.setAttr('title', [t('habits.ahead'), ...(paused.length ? [this.pausedText(paused)] : [])].join(' · '))
       td.setText('·')
       return
     }

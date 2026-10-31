@@ -134,7 +134,7 @@ export function pace(h: Habit, date: string, amounts: Record<string, number>) {
   const key = keyOf(h.goal.per, date)
   let daysLeft = 0
   for (let d = date; keyOf(h.goal.per, d) === key; d = shiftDate(d, '+1d')) daysLeft++
-  return { done, left: Math.max(0, h.goal.amount - done), daysLeft }
+  return { goal: h.goal, done, left: Math.max(0, h.goal.amount - done), daysLeft }
 }
 
 /** Whether any note already uses `name` as a property, ignoring case as Obsidian's properties do. */

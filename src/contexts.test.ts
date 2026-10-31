@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { declarationLine, declarationsIn, parseDeclaration, parseInterval, pausedOn } from './contexts'
+import { declarationLine, declarationsIn, parseDeclaration, parseInterval, pausedBy, pausedOn } from './contexts'
 
 describe('parseDeclaration', () => {
   it('reads the interval and the paused habits of a declaration line', () => {
@@ -84,5 +84,19 @@ describe('parseInterval', () => {
     expect(parseInterval('2026-11-07 → 2026-11-01')).toBeNull()
     expect(parseInterval('2026-02-30')).toBeNull()
     expect(parseInterval('semana que vem')).toBeNull()
+  })
+})
+
+describe('pausedBy', () => {
+  const contexts = [
+    { name: 'hard work', declarations: [{ from: '2026-11-01', to: '2026-11-07', habits: ['Gym', 'leitura'] }] },
+    { name: 'viagem', declarations: [{ from: '2026-11-05', to: '2026-11-05', habits: ['gym'] }] },
+  ]
+
+  it('names the contexts that pause the habit on the date, ignoring case as the links do', () => {
+    expect(pausedBy(contexts, 'gym', '2026-11-05')).toEqual(['hard work', 'viagem'])
+    expect(pausedBy(contexts, 'gym', '2026-11-02')).toEqual(['hard work'])
+    expect(pausedBy(contexts, 'gym', '2026-11-08')).toEqual([])
+    expect(pausedBy(contexts, 'água', '2026-11-05')).toEqual([])
   })
 })

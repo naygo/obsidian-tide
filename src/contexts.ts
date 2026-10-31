@@ -27,6 +27,10 @@ export const pausedOn = (declarations: Declaration[], date: string) =>
     declarations.filter((d) => d.from <= date && date <= d.to).flatMap((d) => d.habits.map((h) => h.toLowerCase())),
   )
 
+/** The names of the contexts whose declarations pause `habit` on `date`. */
+export const pausedBy = (contexts: { name: string; declarations: Declaration[] }[], habit: string, date: string) =>
+  contexts.filter((c) => pausedOn(c.declarations, date).has(habit.toLowerCase())).map((c) => c.name)
+
 /** The line Declare context appends: the note's `pause` copied once, so later edits to it leave the line as it was. */
 export function declarationLine(from: string, to: string, pause: unknown): string | null {
   // unquoted `[[[gym]]]` is YAML for nested arrays; the Properties UI writes `[[gym]]` strings
