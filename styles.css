@@ -339,6 +339,12 @@ body.tide-theme-catppuccin.theme-light {
   font-size: var(--font-smaller);
 }
 
+/* a mark no habit note has: the wavy underline of .tide-off-rule */
+.tide-habit-orphan > span {
+  text-decoration: underline wavy var(--text-warning);
+  text-underline-offset: 3px;
+}
+
 .tide-habits-others > summary {
   color: var(--text-muted);
   cursor: pointer;

@@ -1,11 +1,11 @@
 import { type App, type Events, MarkdownRenderChild, setIcon } from 'obsidian'
-import { type Habit, amountOf, isMarked, plannedOn, progress, setAmount, toggleMark } from './habits'
+import { type Habit, amountOf, isMarked, orphanKeys, plannedOn, progress, setAmount, toggleMark } from './habits'
 import { t } from './i18n'
 
 /**
  * The tide-habits block of a daily: the habits planned on its weekday, and the others folded below, since a mark off
  * the planned days counts the same; a habit a context pauses on the day is in neither. A tap marks a yes/no habit; a
- * habit with a unit takes a number.
+ * habit with a unit takes a number. A mark no habit note has is an orphan, shown with a button to fix it.
  */
 export class HabitsBlock extends MarkdownRenderChild {
   /** kept across renders, so marking a habit among the others doesn't fold them away */
@@ -26,6 +26,8 @@ export class HabitsBlock extends MarkdownRenderChild {
     private paused: (date: string) => Set<string>,
     /** fires 'changed' after any note's metadata or text is read again, so a mark or a declaration redraws */
     private changes: Events,
+    /** Fix on an orphan: the plugin never fixes by itself */
+    private fixOrphan: (key: string) => void,
   ) {
     super(el)
   }
@@ -42,17 +44,31 @@ export class HabitsBlock extends MarkdownRenderChild {
     const date = this.day()
     if (!date) return
     const paused = this.paused(date)
-    const habits = this.habits().filter((h) => !h.archived && !paused.has(h.name.toLowerCase()))
+    const all = this.habits()
+    const habits = all.filter((h) => !h.archived && !paused.has(h.name.toLowerCase()))
     const planned = habits.filter((h) => plannedOn(h, date))
     const others = habits.filter((h) => !plannedOn(h, date))
-    if (!habits.length) return
+    const orphans = orphanKeys(
+      this.app.metadataCache.getCache(this.sourcePath)?.frontmatter,
+      all.map((h) => h.name),
+    )
     if (planned.length) this.list(this.containerEl, planned, date)
+    if (orphans.length) this.orphans(orphans)
     if (others.length) {
       const details = this.containerEl.createEl('details', { cls: 'tide-habits-others' })
       details.open = this.othersOpen
       details.addEventListener('toggle', () => (this.othersOpen = details.open))
       details.createEl('summary', { text: t('habits.others') })
       this.list(details, others, date)
+    }
+  }
+
+  private orphans(keys: string[]) {
+    const ul = this.containerEl.createEl('ul', { cls: 'tide-habits' })
+    for (const key of keys) {
+      const li = ul.createEl('li', { cls: 'tide-habit tide-habit-orphan', attr: { title: t('orphan.mark') } })
+      li.createSpan({ text: key })
+      li.createEl('button', { text: t('orphan.fix') }).addEventListener('click', () => this.fixOrphan(key))
     }
   }
 

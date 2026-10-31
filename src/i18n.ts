@@ -8,6 +8,8 @@ const ptBR = {
   'command.newHabit': 'Novo hábito',
   'command.newContext': 'Novo contexto',
   'command.declareContext': 'Declarar contexto',
+  'command.renameHabit': 'Renomear hábito',
+  'command.fixOrphan': 'Corrigir hábito órfão',
   'command.openWeek': 'Abrir esta semana',
   'command.openMonth': 'Abrir este mês',
   'command.openYear': 'Abrir este ano',
@@ -76,6 +78,13 @@ const ptBR = {
   'newNote.invalid': 'Não foi possível criar a nota com esse nome.',
   // the habit's name is the key of its mark in the daily's frontmatter, so it can't clash with another property
   'newHabit.used': 'Esse nome já é uma propriedade usada no vault.',
+  // Rename habit: the note and the key of its marks in every daily
+  'renameHabit.invalid': 'Não foi possível renomear a nota com esse nome.',
+  // a mark whose key no habit note has, as after renaming the note outside the plugin; never fixed by itself
+  'orphan.mark': 'Nenhuma nota de hábito tem esse nome: Corrigir liga a marca a um hábito',
+  'orphan.fix': 'Corrigir',
+  'orphan.pickKey': 'Qual marca órfã corrigir?',
+  'orphan.pickHabit': 'De qual hábito é essa marca?',
   // Declare context: the interval its line pauses the habits of the context's pause
   'declare.label': 'Intervalo (2026-11-01 → 2026-11-07, ou um dia)',
   'declare.add': 'Declarar',

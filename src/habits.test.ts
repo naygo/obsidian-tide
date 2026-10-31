@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { amountOf, habitOf, isMarked, plannedOn, progress, propertyUsed, setAmount, toggleMark } from './habits'
+import {
+  amountOf,
+  habitOf,
+  isMarked,
+  orphanKeys,
+  plannedOn,
+  progress,
+  propertyUsed,
+  renameMark,
+  setAmount,
+  toggleMark,
+} from './habits'
 
 describe('habitOf', () => {
   it('reads a yes/no habit planned every day from a note with only the marker', () => {
@@ -169,5 +180,50 @@ describe('progress', () => {
 
   it('is 0 without a goal', () => {
     expect(progress(habitOf('gym.md', null), '2026-10-31', { '2026-10-31': 1 })).toBe(0)
+  })
+})
+
+describe('orphanKeys', () => {
+  it('finds a mark whose key no habit note has, as after renaming the note outside the plugin', () => {
+    expect(orphanKeys({ gym: true, água: 2 }, ['musculação', 'água'])).toEqual(['gym'])
+  })
+
+  it('matches habit names by exact case, as the marks are read, so a mark nobody sees still shows', () => {
+    expect(orphanKeys({ gym: true }, ['gym'])).toEqual([])
+    expect(orphanKeys({ Gym: true }, ['gym'])).toEqual(['Gym'])
+  })
+
+  it('reads only marks as habit keys, so tags and other properties never count', () => {
+    expect(orphanKeys({ tags: ['daily'], categories: ['[[daily]]'], mood: 'ok', gym: 0 }, [])).toEqual([])
+    expect(orphanKeys(null, [])).toEqual([])
+  })
+})
+
+describe('renameMark', () => {
+  it('moves the mark to the new key and drops the old one', () => {
+    const fm: Record<string, unknown> = { tags: ['x'], gym: true }
+    renameMark(fm, 'gym', 'musculação')
+    expect(fm).toEqual({ tags: ['x'], musculação: true })
+  })
+
+  it('renames by case only', () => {
+    const fm: Record<string, unknown> = { gym: 2 }
+    renameMark(fm, 'gym', 'Gym')
+    expect(fm).toEqual({ Gym: 2 })
+  })
+
+  it('leaves a daily without the old key as it was', () => {
+    const fm: Record<string, unknown> = { musculação: true }
+    renameMark(fm, 'gym', 'musculação')
+    expect(fm).toEqual({ musculação: true })
+  })
+
+  it('merges into a mark already under the new key instead of overwriting it', () => {
+    const yes: Record<string, unknown> = { gym: true, musculação: true }
+    renameMark(yes, 'gym', 'musculação')
+    expect(yes).toEqual({ musculação: true })
+    const amount: Record<string, unknown> = { agua: 2, água: 3 }
+    renameMark(amount, 'agua', 'água')
+    expect(amount).toEqual({ água: 5 })
   })
 })

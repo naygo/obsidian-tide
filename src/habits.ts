@@ -129,3 +129,21 @@ export function progress(h: Habit, date: string, amounts: Record<string, number>
 /** Whether any note already uses `name` as a property, ignoring case as Obsidian's properties do. */
 export const propertyUsed = (name: string, frontmatters: (Record<string, unknown> | null)[]) =>
   frontmatters.some((fm) => Object.keys(fm ?? {}).some((key) => key.toLowerCase() === name.toLowerCase()))
+
+/** The marks of a daily whose key no habit note has: a habit renamed outside the plugin leaves its marks behind. */
+export function orphanKeys(fm: Record<string, unknown> | null | undefined, habitNames: string[]): string[] {
+  // only a mark reads as a habit key, so tags, categories and any other property never do; the case is exact, as
+  // amountOf reads it, so `Gym` beside a note `gym` is an orphan rather than a mark nobody sees
+  return Object.keys(fm ?? {}).filter((key) => isMarked(fm, key) && !habitNames.includes(key))
+}
+
+/** Moves a mark from one key to another, merging into a mark already there; for processFrontMatter. */
+export function renameMark(fm: Record<string, unknown>, from: string, to: string) {
+  if (!(from in fm) || from === to) return
+  const value = fm[from]
+  const amount = amountOf(fm, from)
+  delete fm[from]
+  if (!(to in fm)) fm[to] = value
+  // marked under both after an outside rename: yes/no stays true, a quantity sums
+  else if (!(value === true && fm[to] === true)) setAmount(fm, to, amount + amountOf(fm, to))
+}
