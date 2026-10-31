@@ -14,6 +14,12 @@ const ptBR = {
   'command.toggleTasks': 'Recolher ou expandir as tarefas',
   'command.openList': 'Abrir lista de tarefas',
   'command.openAgenda': 'Abrir agenda',
+  'command.openCalendar': 'Abrir calendário',
+  // the calendar view: the month navigation
+  'calendar.title': 'Calendário',
+  'calendar.prev': 'Mês anterior',
+  'calendar.next': 'Próximo mês',
+  'calendar.today': 'Hoje',
   // the agenda view: its sections and the mark on today
   'agenda.title': 'Agenda',
   'agenda.overdue': 'Atrasadas',

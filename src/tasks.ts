@@ -10,6 +10,7 @@ import {
 } from 'obsidian'
 import { type Change, orgAction } from './actions'
 import { type AgendaEntry, agenda } from './agenda'
+import { monthWeeks, shiftMonth } from './calendar'
 import { type Vocabulary, vocabulary } from './complete'
 import { type MessageKey, t } from './i18n'
 import {
@@ -337,14 +338,14 @@ export class AgendaView extends ItemView {
     }
     for (const [i, { date, entries }] of days.entries()) {
       const heading = this.contentEl.createDiv({ cls: 'tide-agenda-day' })
-      this.link(heading, `${date} ${weekday(date)}`, { kind: 'day', key: date })
+      placeLink(this.open, heading, `${date} ${weekday(date)}`, { kind: 'day', key: date })
       if (date === today) heading.createSpan({ cls: 'tide-agenda-today', text: t('agenda.today') })
       // the week and month of the first day, then each new one's
       const prev = days[i - 1]?.date
       const week = isoWeek(date).week
-      if (!prev || week !== isoWeek(prev).week) this.link(heading, week, { kind: 'week', key: week })
+      if (!prev || week !== isoWeek(prev).week) placeLink(this.open, heading, week, { kind: 'week', key: week })
       const month = date.slice(0, 7)
-      if (!prev || month !== prev.slice(0, 7)) this.link(heading, month, { kind: 'month', key: month })
+      if (!prev || month !== prev.slice(0, 7)) placeLink(this.open, heading, month, { kind: 'month', key: month })
       const ul = this.contentEl.createEl('ul', { cls: 'tide-tasks' })
       for (const entry of entries) this.row(ul, entry)
     }
@@ -353,13 +354,6 @@ export class AgendaView extends ItemView {
   private section(title: MessageKey, cls: string): HTMLElement {
     this.contentEl.createDiv({ cls: `tide-agenda-section ${cls}`, text: t(title) })
     return this.contentEl.createEl('ul', { cls: 'tide-tasks' })
-  }
-
-  private link(el: HTMLElement, text: string, place: Place) {
-    el.createEl('a', { text, href: '#' }).addEventListener('click', (e) => {
-      e.preventDefault()
-      this.open(place)
-    })
   }
 
   /** The time, then the row as in the list, the deadline mark, the source and Move to…. */
@@ -373,6 +367,16 @@ export class AgendaView extends ItemView {
     move.addEventListener('click', () => this.move(task))
     return li
   }
+}
+
+/** A link that opens the note of a place. */
+function placeLink(open: (place: Place) => void, el: HTMLElement, text: string, place: Place): HTMLElement {
+  const a = el.createEl('a', { text, href: '#' })
+  a.addEventListener('click', (e) => {
+    e.preventDefault()
+    open(place)
+  })
+  return a
 }
 
 export function fileAt(app: App, path: string): TFile | null {
@@ -440,4 +444,74 @@ function applyChanges(doc: string, changes: Change[]): string {
   return [...changes]
     .sort((a, b) => b.from - a.from)
     .reduce((d, c) => d.slice(0, c.from) + c.insert + d.slice(c.to), doc)
+}
+
+export const CALENDAR_VIEW = 'tide-calendar'
+
+/** The month as a grid of ISO weeks, Monday first: a day opens its daily, a week number opens its week note. */
+export class CalendarView extends ItemView {
+  private month: string
+
+  constructor(
+    leaf: WorkspaceLeaf,
+    private index: TaskIndex,
+    private today: () => string,
+    /** opens the daily, week or month, created when missing */
+    private open: (place: Place) => void,
+  ) {
+    super(leaf)
+    this.month = today().slice(0, 7)
+  }
+
+  getViewType() {
+    return CALENDAR_VIEW
+  }
+
+  getDisplayText() {
+    return t('calendar.title')
+  }
+
+  getIcon() {
+    return 'calendar'
+  }
+
+  async onOpen() {
+    // the index fires 'changed' on a new day too, which moves the mark on today
+    this.registerEvent(this.index.on('changed', () => this.render()))
+    this.render()
+  }
+
+  private go(month: string) {
+    this.month = month
+    this.render()
+  }
+
+  private render() {
+    this.contentEl.empty()
+    const today = this.today()
+    const nav = this.contentEl.createDiv({ cls: 'tide-calendar-nav' })
+    this.button(nav, 'chevron-left', 'calendar.prev', () => this.go(shiftMonth(this.month, -1)))
+    placeLink(this.open, nav, this.month, { kind: 'month', key: this.month })
+    this.button(nav, 'chevron-right', 'calendar.next', () => this.go(shiftMonth(this.month, 1)))
+    nav.createEl('button', { text: t('calendar.today') }).addEventListener('click', () => this.go(today.slice(0, 7)))
+
+    const grid = this.contentEl.createDiv({ cls: 'tide-calendar' })
+    const weeks = monthWeeks(this.month)
+    grid.createDiv()
+    for (const day of weeks[0].days) grid.createDiv({ cls: 'tide-calendar-weekday', text: weekday(day) })
+    for (const { week, days } of weeks) {
+      placeLink(this.open, grid, week.slice(6), { kind: 'week', key: week }).addClass('tide-calendar-week')
+      for (const day of days) {
+        const a = placeLink(this.open, grid, String(Number(day.slice(8))), { kind: 'day', key: day })
+        if (!day.startsWith(this.month)) a.addClass('tide-calendar-other')
+        if (day === today) a.addClass('tide-calendar-today')
+      }
+    }
+  }
+
+  private button(el: HTMLElement, icon: string, label: MessageKey, click: () => void) {
+    const button = el.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': t(label) } })
+    setIcon(button, icon)
+    button.addEventListener('click', click)
+  }
 }

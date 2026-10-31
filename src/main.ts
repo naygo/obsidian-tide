@@ -36,6 +36,8 @@ import { DEFAULT_SETTINGS, NewListModal, THEMES, type TideSettings, TideSettingT
 import {
   AGENDA_VIEW,
   AgendaView,
+  CALENDAR_VIEW,
+  CalendarView,
   LIST_VIEW,
   type TaskAt,
   TaskIndex,
@@ -381,6 +383,12 @@ export default class TidePlugin extends Plugin {
     return this.period(dest.key)
   }
 
+  /** Opens the note of a place, created when missing; for the agenda and the calendar. */
+  private async openPlace(place: Place) {
+    const file = await this.destination(place)
+    if (file) await this.app.workspace.getLeaf(false).openFile(file)
+  }
+
   /** Opens a view in the right sidebar, or the one already open. */
   private async openView(type: string) {
     const leaf = this.app.workspace.getLeavesOfType(type)[0] ?? this.app.workspace.getRightLeaf(false)
@@ -535,8 +543,7 @@ export default class TidePlugin extends Plugin {
           leaf,
           this.index,
           today,
-          (place) =>
-            void this.destination(place).then((file) => file && this.app.workspace.getLeaf(false).openFile(file)),
+          (place) => void this.openPlace(place),
           (task) => new MoveModal(this.app, this.moveTargets(), (dest) => void this.moveTask(task, dest)).open(),
         ),
     )
@@ -544,6 +551,16 @@ export default class TidePlugin extends Plugin {
       id: 'open-agenda',
       name: t('command.openAgenda'),
       callback: () => void this.openView(AGENDA_VIEW),
+    })
+
+    this.registerView(
+      CALENDAR_VIEW,
+      (leaf) => new CalendarView(leaf, this.index, today, (place) => void this.openPlace(place)),
+    )
+    this.addCommand({
+      id: 'open-calendar',
+      name: t('command.openCalendar'),
+      callback: () => void this.openView(CALENDAR_VIEW),
     })
 
     this.addCommand({

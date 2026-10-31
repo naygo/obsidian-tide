@@ -272,3 +272,42 @@ body.tide-theme-catppuccin.theme-light {
 .tide-empty {
   color: var(--text-muted);
 }
+
+/* the calendar: the month navigation, then the week numbers and the days of each ISO week */
+.tide-calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  font-weight: var(--font-semibold);
+}
+
+.tide-calendar {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--size-2-2);
+  margin-top: var(--size-4-3);
+  text-align: center;
+}
+
+.tide-calendar a {
+  padding: var(--size-2-2);
+  border-radius: var(--radius-s);
+  color: var(--text-normal);
+  text-decoration: none;
+}
+
+.tide-calendar a:hover {
+  background: var(--background-modifier-hover);
+}
+
+.tide-calendar-weekday,
+.tide-calendar a.tide-calendar-week,
+.tide-calendar a.tide-calendar-other {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+.tide-calendar a.tide-calendar-today {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
