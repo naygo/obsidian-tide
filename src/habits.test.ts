@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { habitOf, isMarked, plannedOn, propertyUsed, toggleMark } from './habits'
+import { amountOf, habitOf, isMarked, plannedOn, progress, propertyUsed, setAmount, toggleMark } from './habits'
 
 describe('habitOf', () => {
   it('reads a yes/no habit planned every day from a note with only the marker', () => {
@@ -11,6 +11,7 @@ describe('habitOf', () => {
       icon: null,
       color: null,
       archived: false,
+      goal: null,
     })
   })
 
@@ -62,6 +63,12 @@ describe('isMarked', () => {
     expect(isMarked({ gym: false }, 'gym')).toBe(false)
     expect(isMarked({ gym: true }, 'gym')).toBe(true)
   })
+
+  it('reads a quantity as marked, and 0 or a word as not, as the goal counts them', () => {
+    expect(isMarked({ água: 2 }, 'água')).toBe(true)
+    expect(isMarked({ água: 0 }, 'água')).toBe(false)
+    expect(isMarked({ gym: 'sim' }, 'gym')).toBe(false)
+  })
 })
 
 describe('toggleMark', () => {
@@ -82,5 +89,85 @@ describe('propertyUsed', () => {
   it('finds a name already used as a property in any note, ignoring case', () => {
     expect(propertyUsed('Tags', [null, { tags: ['x'] }])).toBe(true)
     expect(propertyUsed('gym', [null, { tags: ['x'] }])).toBe(false)
+  })
+})
+
+describe('habitOf goal', () => {
+  it('reads a positive goal with its period', () => {
+    expect(habitOf('gym.md', { goal: 3, goal_per: 'week' }).goal).toEqual({ amount: 3, per: 'week' })
+    expect(habitOf('água.md', { unit: 'copos', goal: '8', goal_per: 'day' }).goal).toEqual({ amount: 8, per: 'day' })
+  })
+
+  it('drops goal_per: day without a unit, since a yes/no habit is at most 1 a day', () => {
+    expect(habitOf('gym.md', { goal: 1, goal_per: 'day' }).goal).toBeNull()
+  })
+
+  it('drops a goal without a known goal_per or a positive amount', () => {
+    expect(habitOf('gym.md', { goal: 3 }).goal).toBeNull()
+    expect(habitOf('gym.md', { goal: 3, goal_per: 'fortnight' }).goal).toBeNull()
+    expect(habitOf('gym.md', { goal: 0, goal_per: 'week' }).goal).toBeNull()
+    expect(habitOf('gym.md', { goal: 'muito', goal_per: 'week' }).goal).toBeNull()
+  })
+})
+
+describe('amountOf', () => {
+  it('reads true as 1, a number as itself and a numeric string as its number', () => {
+    expect(amountOf({ gym: true }, 'gym')).toBe(1)
+    expect(amountOf({ água: 2.5 }, 'água')).toBe(2.5)
+    expect(amountOf({ água: '2' }, 'água')).toBe(2)
+  })
+
+  it('reads anything else as 0', () => {
+    expect(amountOf(null, 'gym')).toBe(0)
+    expect(amountOf({ gym: false }, 'gym')).toBe(0)
+    expect(amountOf({ gym: 'sim' }, 'gym')).toBe(0)
+  })
+})
+
+describe('setAmount', () => {
+  it('writes the number', () => {
+    const fm: Record<string, unknown> = {}
+    setAmount(fm, 'água', 2)
+    expect(fm).toEqual({ água: 2 })
+  })
+
+  it('deletes the property on 0 or no number, never writing 0', () => {
+    for (const n of [0, NaN, -1]) {
+      const fm: Record<string, unknown> = { água: 2 }
+      setAmount(fm, 'água', n)
+      expect(fm).toEqual({})
+    }
+  })
+})
+
+describe('progress', () => {
+  const água = habitOf('água.md', { unit: 'copos', goal: 8, goal_per: 'day' })
+  const gym = habitOf('gym.md', { days: ['mon'], goal: 3, goal_per: 'week' })
+
+  it('sums the day of a daily goal', () => {
+    expect(progress(água, '2026-10-31', { '2026-10-31': 2, '2026-10-30': 5 })).toBe(2)
+  })
+
+  it('sums the ISO week, counting marks off the planned days the same', () => {
+    // 2026-10-26 is a Monday; 2026-11-01 the Sunday of the same week; 2026-11-02 the next Monday
+    const marks = { '2026-10-25': 1, '2026-10-26': 1, '2026-10-28': 1, '2026-11-01': 1, '2026-11-02': 1 }
+    expect(progress(gym, '2026-10-31', marks)).toBe(3)
+  })
+
+  it('sums the calendar month and year', () => {
+    const marks = { '2026-09-30': 4, '2026-10-01': 2, '2026-10-31': 3, '2027-01-01': 7 }
+    expect(progress(habitOf('l.md', { unit: 'p', goal: 100, goal_per: 'month' }), '2026-10-15', marks)).toBe(5)
+    expect(progress(habitOf('l.md', { unit: 'p', goal: 100, goal_per: 'year' }), '2026-10-15', marks)).toBe(9)
+  })
+
+  it('keeps a week across a new year whole, while month and year split it', () => {
+    // 2026-12-31 and 2027-01-01 both fall in 2026-W53
+    const marks = { '2026-12-31': 1, '2027-01-01': 1 }
+    expect(progress(gym, '2027-01-01', marks)).toBe(2)
+    expect(progress(habitOf('g.md', { goal: 9, goal_per: 'year' }), '2027-01-01', marks)).toBe(1)
+  })
+
+  it('is 0 without a goal', () => {
+    expect(progress(habitOf('gym.md', null), '2026-10-31', { '2026-10-31': 1 })).toBe(0)
   })
 })

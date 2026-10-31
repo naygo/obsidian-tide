@@ -76,16 +76,14 @@ export function firstDay({ kind, key }: Place): string {
   return new Date(Date.UTC(year, 0, monday)).toISOString().slice(0, 10)
 }
 
+/** The key of the day, ISO week, calendar month or year that holds the date. */
+export function keyOf(kind: Exclude<Place['kind'], 'list'>, date: string): string {
+  return kind === 'week' ? isoWeek(date).week : date.slice(0, { day: 10, month: 7, year: 4 }[kind])
+}
+
 /** Whether the date falls in the place: its day, ISO week, calendar month or year. A list holds every date. */
 export function holds(place: Place, date: string): boolean {
-  const key = {
-    list: place.key,
-    day: date,
-    week: isoWeek(date).week,
-    month: date.slice(0, 7),
-    year: date.slice(0, 4),
-  }[place.kind]
-  return key === place.key
+  return place.kind === 'list' || keyOf(place.kind, date) === place.key
 }
 
 /**

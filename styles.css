@@ -314,7 +314,7 @@ body.tide-theme-catppuccin.theme-light {
   color: var(--text-on-accent);
 }
 
-/* the tide-habits block: one checkbox per habit planned on the day, in the habit's color */
+/* the tide-habits block: a checkbox or a number per habit planned on the day, in the habit's color; others folded */
 .tide-habits {
   list-style: none;
   padding-inline-start: 0;
@@ -328,6 +328,20 @@ body.tide-theme-catppuccin.theme-light {
 
 .tide-habit-icon {
   display: inline-flex;
+}
+
+.tide-habit-amount {
+  width: 5em;
+}
+
+.tide-habit-goal {
+  color: var(--text-muted);
+  font-size: var(--font-smaller);
+}
+
+.tide-habits-others > summary {
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 .tide-habit-red {

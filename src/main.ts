@@ -16,7 +16,7 @@ import {
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { foldTasks, tideEditor } from './editor'
-import { type Habit, habitOf, propertyUsed, toggleMark } from './habits'
+import { type Habit, amountOf, habitOf, propertyUsed } from './habits'
 import { HabitsBlock } from './habitViews'
 import { type SuggestContext, type Suggestion, type Suggestions, orgSuggest } from './complete'
 import { type MessageKey, t } from './i18n'
@@ -462,12 +462,23 @@ export default class TidePlugin extends Plugin {
     return this.app.metadataCache.getFileCache(file)?.frontmatter ?? null
   }
 
-  /** Marks or unmarks the habit in the daily of `date`, created when missing; a future day is read-only. */
-  private async toggleHabit(date: string, habit: Habit) {
+  /** Edits the frontmatter of the daily of `date` to mark a habit, created when missing; a future day is read-only. */
+  private async markHabit(date: string, edit: (fm: Record<string, unknown>) => void) {
     if (date > today()) return
     const file = await this.day(date)
-    if (file)
-      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => toggleMark(fm, habit.name))
+    if (file) await this.app.fileManager.processFrontMatter(file, edit)
+  }
+
+  /** The habit's amount in each daily that has it, by date. */
+  private habitAmounts(habit: Habit): Record<string, number> {
+    // ponytail: scans every note's cached frontmatter per habit with a goal on each render; index the dailies if it lags
+    const amounts: Record<string, number> = {}
+    for (const f of this.app.vault.getMarkdownFiles()) {
+      const date = dayOf(this.daily, f.path)
+      const n = date ? amountOf(this.frontmatter(f), habit.name) : 0
+      if (date && n) amounts[date] = n
+    }
+    return amounts
   }
 
   /** New habit: its name becomes a property of the dailies, so a name already used as a property is refused. */
@@ -521,8 +532,10 @@ export default class TidePlugin extends Plugin {
     })
     this.registerMarkdownCodeBlockProcessor('tide-habits', (_source, el, ctx) => {
       const day = () => dayOf(this.daily, ctx.sourcePath)
-      const toggle = (date: string, habit: Habit) => void this.toggleHabit(date, habit)
-      ctx.addChild(new HabitsBlock(el, this.app, ctx.sourcePath, day, () => this.habits(), today, toggle))
+      const habits = () => this.habits()
+      const amounts = (habit: Habit) => this.habitAmounts(habit)
+      const mark = (date: string, edit: (fm: Record<string, unknown>) => void) => void this.markHabit(date, edit)
+      ctx.addChild(new HabitsBlock(el, this.app, ctx.sourcePath, day, habits, today, amounts, mark))
     })
     // the daily is born on startup, on coming back to the app and at midnight with the app open
     this.app.workspace.onLayoutReady(() => void this.createDaily())

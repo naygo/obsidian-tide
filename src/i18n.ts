@@ -76,6 +76,13 @@ const ptBR = {
   'newHabit.used': 'Esse nome já é uma propriedade usada no vault.',
   // the tide-habits block: a future day shows its habits read-only
   'habits.future': 'Dia futuro: só leitura',
+  // the habits not planned on the day, folded below the planned ones
+  'habits.others': 'Outros',
+  // after the goal's progress, as in 2/8 hoje or 1/3 na semana
+  'habits.per.day': 'hoje',
+  'habits.per.week': 'na semana',
+  'habits.per.month': 'no mês',
+  'habits.per.year': 'no ano',
   'settings.periodsFolder': 'Pasta dos períodos',
   'settings.periodsFolder.desc': 'Onde ficam os arquivos de semana, mês e ano. Vazio é a raiz do vault.',
   'settings.inbox': 'Arquivo da Inbox',
