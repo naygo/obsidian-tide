@@ -8,7 +8,7 @@ export default defineConfig([
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.mjs', 'esbuild.config.mjs'],
+          allowDefaultProject: ['eslint.config.mjs', 'esbuild.config.mjs', 'commitlint.config.js'],
         },
       },
     },
