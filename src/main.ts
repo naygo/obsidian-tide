@@ -33,7 +33,7 @@ import { migrate, moveBlock } from './move'
 import { parseBlock } from './org'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, THEMES, type TideSettings, TideSettingTab } from './settings'
-import { TaskIndex, TasksBlock, fileAt } from './tasks'
+import { LIST_VIEW, TaskIndex, TaskListView, TasksBlock, fileAt } from './tasks'
 
 const KEYS: [string, Exclude<Action, 'nextBox'>][] = [
   ['Shift-ArrowRight', 'nextState'],
@@ -480,6 +480,19 @@ export default class TidePlugin extends Plugin {
       id: 'migrate-pending',
       name: t('command.migrate'),
       callback: () => void this.migratePending(),
+    })
+
+    this.registerView(LIST_VIEW, (leaf) => new TaskListView(leaf, this.index))
+    this.addCommand({
+      id: 'open-list',
+      name: t('command.openList'),
+      callback: async () => {
+        const leaf = this.app.workspace.getLeavesOfType(LIST_VIEW)[0] ?? this.app.workspace.getRightLeaf(false)
+        if (!leaf) return
+        await leaf.setViewState({ type: LIST_VIEW, active: true })
+        // revealLeaf needs minAppVersion 1.7.2; a collapsed sidebar, or the closed drawer on a phone, opens here
+        if (leaf.getRoot() === this.app.workspace.rightSplit) this.app.workspace.rightSplit.expand()
+      },
     })
 
     this.addCommand({

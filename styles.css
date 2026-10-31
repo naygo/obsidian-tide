@@ -224,3 +224,23 @@ body.tide-theme-catppuccin.theme-light {
   font-size: var(--font-ui-smaller);
   cursor: pointer;
 }
+
+/* the list view: the filters on top, then the tasks */
+.tide-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: var(--size-4-2);
+  margin-bottom: var(--size-4-3);
+}
+
+.tide-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-1);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.tide-empty {
+  color: var(--text-muted);
+}
