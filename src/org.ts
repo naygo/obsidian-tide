@@ -193,3 +193,22 @@ export function shiftDate(date: string, repeater: string): string {
 }
 
 const isoDate = (d: Date) => d.toISOString().slice(0, 10)
+
+const FACES: [RegExp, string][] = [
+  [/^\s*(:(?:PROPERTIES|LOGBOOK|END):)\s*$/, 'tide-drawer'],
+  [/^\s*(:(?!PROPERTIES:|LOGBOOK:|END:)[\w-]+:)\s/, 'tide-property'],
+  [/^\s*(- State "[A-Z]+" from "[A-Z]*")/, 'tide-log'],
+]
+// not the inner `[2026-10-31]` of a `[[2026-10-31]]` link
+const TIMESTAMP = /<\d{4}-\d{2}-\d{2}[^>]*>|(?<!\[)\[\d{4}-\d{2}-\d{2}[^\]]*\](?!\])/g
+
+/** The org faces of a line under a task head, or a head's own timestamps: drawers, property names, the state log, dates. */
+export function facesOf(line: string): { from: number; to: number; cls: string }[] {
+  const faces = []
+  for (const [re, cls] of FACES) {
+    const m = re.exec(line)
+    if (m) faces.push({ from: m.index + m[0].indexOf(m[1]), to: m.index + m[0].indexOf(m[1]) + m[1].length, cls })
+  }
+  for (const m of line.matchAll(TIMESTAMP)) faces.push({ from: m.index, to: m.index + m[0].length, cls: 'tide-date' })
+  return faces
+}

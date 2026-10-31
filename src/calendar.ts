@@ -1,4 +1,5 @@
 import { firstDay, isoWeek } from './ladder'
+import { type ListedTask, isOpen } from './list'
 import { shiftDate } from './org'
 
 /** The ISO weeks that touch a YYYY-MM month, each with its seven days from Monday, spilling into the months around. */
@@ -29,4 +30,13 @@ export function yearWeeks(year: string): (string | null)[][] {
     monday = shiftDate(monday, '+1w')
   }
   return weeks
+}
+
+/** The open tasks of the month's note, or of a week of it (by its Thursday), with no SCHEDULED or DEADLINE: no day to fall on. */
+export function looseIn(tasks: ListedTask[], month: string): ListedTask[] {
+  return tasks.filter(({ block, home }) => {
+    if (block.kind !== 'task' || !isOpen(block) || block.scheduled || block.deadline || !home) return false
+    if (home.kind === 'month') return home.key === month
+    return home.kind === 'week' && shiftDate(firstDay(home), '+3d').startsWith(month)
+  })
 }

@@ -16,7 +16,16 @@ import {
 } from 'obsidian'
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { foldTasks, tideEditor } from './editor'
-import { type Habit, amountOf, habitOf, orphanKeys, propertyUsed, renameMark } from './habits'
+import {
+  HABIT_PROPERTIES,
+  type Habit,
+  amountOf,
+  habitOf,
+  orphanKeys,
+  propertyUsed,
+  renameMark,
+  seedHabits,
+} from './habits'
 import { HABITS_VIEW, HabitsBlock, HabitsView } from './habitViews'
 import { declarationLine, parseInterval, pausedOn } from './contexts'
 import { type SuggestContext, type Suggestion, type Suggestions, orgSuggest } from './complete'
@@ -35,19 +44,20 @@ import {
   placeOf,
 } from './ladder'
 import { migrate, moveBlock } from './move'
+import { THEMES, themeOf } from './themes'
 import { captureLine, parseBlock } from './org'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
-import { DEFAULT_SETTINGS, THEMES, TextModal, type TideSettings, TideSettingTab, createMarked } from './settings'
+import { DEFAULT_SETTINGS, TextModal, type TideSettings, TideSettingTab, createMarked } from './settings'
 import {
-  AGENDA_VIEW,
   AgendaView,
-  CALENDAR_VIEW,
   CalendarView,
-  LIST_VIEW,
+  TASKS_VIEW,
   type TaskAt,
   TaskIndex,
   TaskListView,
+  type TasksTab,
   TasksBlock,
+  TasksView,
   fileAt,
   headAt,
 } from './tasks'
@@ -429,6 +439,13 @@ export default class TidePlugin extends Plugin {
     if (leaf.getRoot() === workspace.rightSplit) workspace.rightSplit.expand()
   }
 
+  /** The tasks panel on `tab`. */
+  private async openTasks(tab: TasksTab) {
+    await this.openView(TASKS_VIEW)
+    const view = this.app.workspace.getLeavesOfType(TASKS_VIEW)[0]?.view
+    if (view instanceof TasksView) view.show(tab)
+  }
+
   /** Migrate pending to today: each file's pending blocks go to the end of today's daily first, then leave the file. */
   private async migratePending() {
     if (this.migrating) return
@@ -604,7 +621,7 @@ export default class TidePlugin extends Plugin {
   /** New habit: its name becomes a property of the dailies, so a name already used as a property is refused. */
   private async createHabit(name: string) {
     if (this.propertyUsed(name)) new Notice(t('newHabit.used'))
-    else await createMarked(this.app, this.settings.habitMarker, name)
+    else await createMarked(this.app, this.settings.habitMarker, name, HABIT_PROPERTIES)
   }
 
   /** The week, month or year note of `key`, created from its template when missing; for Move to…, calendar and agenda. */
@@ -622,6 +639,7 @@ export default class TidePlugin extends Plugin {
 
   async onload() {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<TideSettings> | null) }
+    this.settings.theme = themeOf(this.settings.theme, document.body.hasClass('theme-dark'))
     this.addSettingTab(new TideSettingTab(this.app, this))
     this.daily = await readDailyConfig(this.app)
     this.applyVisual()
@@ -657,6 +675,19 @@ export default class TidePlugin extends Plugin {
     })
     // the daily is born on startup, on coming back to the app and at midnight with the app open
     this.app.workspace.onLayoutReady(() => void this.createDaily())
+    // a new daily, whoever creates it (Tide, the core Daily notes, a click on a link), takes the day's habits in its
+    // properties; only today or ahead, so a pull of past dailies is never written to
+    this.app.workspace.onLayoutReady(() =>
+      this.registerEvent(
+        this.app.vault.on('create', (file) => {
+          const date = file instanceof TFile ? dayOf(this.daily, file.path) : null
+          if (file instanceof TFile && date && date >= today())
+            void this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) =>
+              seedHabits(fm, this.habits(), date, this.paused(date)),
+            )
+        }),
+      ),
+    )
     const onReturn = () => document.visibilityState === 'visible' && void this.createDaily()
     this.registerDomEvent(document, 'visibilitychange', onReturn)
     this.registerDomEvent(window, 'focus', onReturn)
@@ -720,38 +751,30 @@ export default class TidePlugin extends Plugin {
       callback: () => void this.migratePending(),
     })
 
-    this.registerView(LIST_VIEW, (leaf) => new TaskListView(leaf, this.index))
-    this.addCommand({
-      id: 'open-list',
-      name: t('command.openList'),
-      callback: () => void this.openView(LIST_VIEW),
-    })
-
     this.registerView(
-      AGENDA_VIEW,
+      TASKS_VIEW,
       (leaf) =>
-        new AgendaView(
-          leaf,
-          this.index,
-          today,
-          (place) => void this.openPlace(place),
-          (task) => new MoveModal(this.app, this.moveTargets(), (dest) => void this.moveTask(task, dest)).open(),
-        ),
+        new TasksView(leaf, {
+          list: new TaskListView(leaf, this.index),
+          calendar: new CalendarView(leaf, this.index, today, (place) => void this.openPlace(place)),
+          agenda: new AgendaView(
+            leaf,
+            this.index,
+            today,
+            (place) => void this.openPlace(place),
+            (task) => new MoveModal(this.app, this.moveTargets(), (dest) => void this.moveTask(task, dest)).open(),
+          ),
+        }),
     )
-    this.addCommand({
-      id: 'open-agenda',
-      name: t('command.openAgenda'),
-      callback: () => void this.openView(AGENDA_VIEW),
-    })
-
-    this.registerView(
-      CALENDAR_VIEW,
-      (leaf) => new CalendarView(leaf, this.index, today, (place) => void this.openPlace(place)),
-    )
+    this.addRibbonIcon('check-square', t('command.openTasks'), () => void this.openTasks('list'))
+    this.addCommand({ id: 'open-tasks', name: t('command.openTasks'), callback: () => void this.openTasks('list') })
+    // the old commands stay, so a hotkey on one still works: each opens its tab
+    this.addCommand({ id: 'open-list', name: t('command.openList'), callback: () => void this.openTasks('list') })
+    this.addCommand({ id: 'open-agenda', name: t('command.openAgenda'), callback: () => void this.openTasks('agenda') })
     this.addCommand({
       id: 'open-calendar',
       name: t('command.openCalendar'),
-      callback: () => void this.openView(CALENDAR_VIEW),
+      callback: () => void this.openTasks('calendar'),
     })
 
     this.registerView(

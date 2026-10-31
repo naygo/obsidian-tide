@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { captureLine, parseBlock, parseHead, serializeBlock, shiftDate } from './org'
+import { captureLine, facesOf, parseBlock, parseHead, serializeBlock, shiftDate } from './org'
 
 const SPEC_EXAMPLE = [
   '- TODO [#A] dentista :saude:casa:',
@@ -143,5 +143,26 @@ describe('captureLine', () => {
 
   it('gives nothing for blank text', () => {
     expect(captureLine(' \n ')).toBeNull()
+  })
+})
+
+describe('facesOf', () => {
+  const on = (line: string) => facesOf(line).map((f) => [f.cls, line.slice(f.from, f.to)])
+
+  it('finds the drawers, a property name, the state log and the timestamps', () => {
+    expect(on('  :PROPERTIES:')).toEqual([['tide-drawer', ':PROPERTIES:']])
+    expect(on('  :CREATED: [2026-10-31 sáb 10:00]')).toEqual([
+      ['tide-property', ':CREATED:'],
+      ['tide-date', '[2026-10-31 sáb 10:00]'],
+    ])
+    expect(on('  - State "DONE" from "TODO" [2026-10-31 sáb]')).toEqual([
+      ['tide-log', '- State "DONE" from "TODO"'],
+      ['tide-date', '[2026-10-31 sáb]'],
+    ])
+    expect(on('  SCHEDULED: <2026-10-31 sáb>')).toEqual([['tide-date', '<2026-10-31 sáb>']])
+  })
+
+  it('leaves a link to a day and plain text alone', () => {
+    expect(on('- TODO ver [[2026-10-31]] hoje')).toEqual([])
   })
 })

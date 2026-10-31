@@ -90,16 +90,26 @@ export function habitOf(path: string, fm: Record<string, unknown> | null | undef
   }
 }
 
+/** The properties a new habit note is born with, empty: yes/no, every day, no goal, not archived. */
+export const HABIT_PROPERTIES = {
+  unit: null,
+  days: null,
+  goal: null,
+  goal_per: null,
+  icon: null,
+  color: null,
+  archived: false,
+}
+
 /** Planned on the date's weekday and not archived. */
 export function plannedOn(h: Habit, date: string): boolean {
   const [y, m, d] = date.split('-').map(Number)
   return !h.archived && (!h.days || h.days.includes(new Date(Date.UTC(y, m - 1, d)).getUTCDay()))
 }
 
-/** Marks with `true`, or unmarks by deleting the property; for processFrontMatter. */
+/** Marks with `true`, or unmarks with `false`, so the habit stays in the daily's properties; for processFrontMatter. */
 export function toggleMark(fm: Record<string, unknown>, name: string) {
-  if (isMarked(fm, name)) delete fm[name]
-  else fm[name] = true
+  fm[name] = !isMarked(fm, name)
 }
 
 /** A mark as an amount: `true` is 1, a number or a numeric string is its number, anything else 0. */
@@ -113,10 +123,15 @@ export function amountOf(fm: Record<string, unknown> | null | undefined, name: s
 /** A missing property is not marked, never "failed"; marked is what counts toward the goal. */
 export const isMarked = (fm: Record<string, unknown> | null | undefined, name: string) => amountOf(fm, name) > 0
 
-/** Writes a quantity, or unmarks on 0 or no number, so a mark is never 0; for processFrontMatter. */
+/** Writes a quantity, or 0 on no number, so the habit stays in the daily's properties; for processFrontMatter. */
 export function setAmount(fm: Record<string, unknown>, name: string, n: number) {
-  if (n > 0) fm[name] = n
-  else delete fm[name]
+  fm[name] = n > 0 ? n : 0
+}
+
+/** The habits planned on `date` and not paused, unmarked, so a new daily shows them in its properties to mark there. */
+export function seedHabits(fm: Record<string, unknown>, habits: Habit[], date: string, paused: Set<string>) {
+  for (const h of habits)
+    if (plannedOn(h, date) && !paused.has(h.name.toLowerCase()) && !(h.name in fm)) fm[h.name] = h.unit ? 0 : false
 }
 
 /** The amounts by date summed over the goal's period that holds `date`; a mark off the planned days counts the same. */
@@ -154,7 +169,7 @@ export function renameMark(fm: Record<string, unknown>, from: string, to: string
   const value = fm[from]
   const amount = amountOf(fm, from)
   delete fm[from]
-  if (!(to in fm)) fm[to] = value
-  // marked under both after an outside rename: yes/no stays true, a quantity sums
-  else if (!(value === true && fm[to] === true)) setAmount(fm, to, amount + amountOf(fm, to))
+  if (!(to in fm) || (amount && !isMarked(fm, to))) fm[to] = value
+  // marked under both after an outside rename: yes/no stays true, a quantity sums; an unmarked one adds nothing
+  else if (amount && !(value === true && fm[to] === true)) setAmount(fm, to, amount + amountOf(fm, to))
 }

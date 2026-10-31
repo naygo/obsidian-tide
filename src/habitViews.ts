@@ -282,6 +282,8 @@ export class HabitsView extends ItemView {
     paused: string[],
   ) {
     td.setAttr('aria-label', `${habit.name} ${date}`)
+    if (habit.color) td.addClass(`tide-habit-${habit.color}`)
+    if (date === today) td.addClass('tide-board-today')
     // a pause shows ahead too, as declared days to come; a mark on a paused day counts the same
     if (paused.length) {
       td.addClass('tide-board-paused')
@@ -303,6 +305,7 @@ export class HabitsView extends ItemView {
     }
     const amount = amountOf(fm, habit.name)
     const button = td.createEl('button', { cls: 'tide-board-amount', text: amount ? String(amount) : '' })
+    if (amount) button.addClass('tide-board-filled')
     button.addEventListener('click', () => {
       button.remove()
       const field = createEl('input', { type: 'number', cls: 'tide-habit-amount tide-board-field' })

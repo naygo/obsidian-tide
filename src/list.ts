@@ -21,9 +21,11 @@ export interface ListFilter {
   about: string
   tag: string
   category: string
+  /** part of the title, any case */
+  q: string
 }
 
-export const ALL: ListFilter = { state: 'all', priority: '', place: '', about: '', tag: '', category: '' }
+export const ALL: ListFilter = { state: 'all', priority: '', place: '', about: '', tag: '', category: '', q: '' }
 
 const property = (b: OrgBlock, key: string) => b.properties?.find(([k]) => k.toUpperCase() === key)?.[1].trim() ?? ''
 
@@ -54,7 +56,8 @@ export function filterTasks(tasks: ListedTask[], f: ListFilter): ListedTask[] {
         matches(f.place, home?.kind) &&
         (!f.about || aboutOf(b).includes(f.about)) &&
         (!f.tag || b.tags.includes(f.tag)) &&
-        matches(f.category, categoryOf(b))
+        matches(f.category, categoryOf(b)) &&
+        (!f.q || b.title.toLowerCase().includes(f.q.toLowerCase()))
       )
     })
     .sort((a, b) => rank(a).localeCompare(rank(b)) || a.block.title.localeCompare(b.block.title))

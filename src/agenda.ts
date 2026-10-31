@@ -27,6 +27,12 @@ function datesOf({ block, home }: ListedTask): TaskDate[] {
 const timeOf = (task: ListedTask, d: TaskDate) =>
   (d.kind === 'scheduled' ? task.block.scheduled : task.block.deadline)?.time ?? null
 
+const byTime = (a: AgendaEntry, b: AgendaEntry) =>
+  Number(!a.time) - Number(!b.time) ||
+  (a.time ?? '').padStart(5, '0').localeCompare((b.time ?? '').padStart(5, '0')) ||
+  a.task.path.localeCompare(b.task.path) ||
+  a.task.line - b.task.line
+
 /**
  * The org agenda of `items`, the tasks and events of the vault, on `today`; `pending` comes from the index, so it
  * matches what Migrate pending to today moves. What lives off the ladder never shows, as on the ladder.
@@ -42,19 +48,21 @@ export function agenda(items: ListedTask[], pending: ListedTask[], today: string
   })
   const late = new Set(overdue.map((e) => e.task))
   const days = Array.from({ length: 7 }, (_, i) => shiftDate(today, `+${i}d`))
-  const byTime = (a: AgendaEntry, b: AgendaEntry) =>
-    Number(!a.time) - Number(!b.time) ||
-    (a.time ?? '').padStart(5, '0').localeCompare((b.time ?? '').padStart(5, '0')) ||
-    a.task.path.localeCompare(b.task.path) ||
-    a.task.line - b.task.line
   return {
     overdue: overdue.sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)),
     pending: pending.filter((t) => !late.has(t)),
-    days: days.map((date) => ({
-      date,
-      entries: onLadder
-        .flatMap((task) => datesOf(task).flatMap((d) => (d.date === date ? [entry(task, d)] : [])))
-        .sort(byTime),
-    })),
+    days: days.map((date) => ({ date, entries: onDate(items, date) })),
   }
 }
+
+/** What falls on `date`, by time: the entries of the agenda's day, for any day. */
+export function onDate(items: ListedTask[], date: string): AgendaEntry[] {
+  return items
+    .filter((t) => t.home)
+    .flatMap((task) => datesOf(task).flatMap((d) => (d.date === date ? [{ ...d, task, time: timeOf(task, d) }] : [])))
+    .sort(byTime)
+}
+
+/** The whole days from `date` to `today`, 0 when it is not yet past. */
+export const daysLate = (date: string, today: string) =>
+  Math.max(0, Math.round((Date.parse(`${today}T00:00Z`) - Date.parse(`${date}T00:00Z`)) / 864e5))

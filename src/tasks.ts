@@ -6,11 +6,12 @@ import {
   MarkdownRenderChild,
   TFile,
   type WorkspaceLeaf,
+  moment,
   setIcon,
 } from 'obsidian'
 import { type Change, orgAction } from './actions'
-import { type AgendaEntry, agenda } from './agenda'
-import { monthWeeks, shiftMonth } from './calendar'
+import { type AgendaEntry, agenda, daysLate, onDate } from './agenda'
+import { looseIn, monthWeeks, shiftMonth } from './calendar'
 import { type Vocabulary, vocabulary } from './complete'
 import { type Declaration, declarationsIn } from './contexts'
 import { type MessageKey, t } from './i18n'
@@ -213,15 +214,19 @@ export class TasksBlock extends MarkdownRenderChild {
 
 export const LIST_VIEW = 'tide-list'
 
+/** the filter a list opens with, and what "clear filters" goes back to */
+const START: ListFilter = { ...ALL, state: 'open' }
+
 const PLACES = ['list', 'year', 'month', 'week', 'day'] as const
 
 /** Every task of the vault, filtered by state, priority, place, about, tag and category; live with the index. */
 export class TaskListView extends ItemView {
   /** kept across renders, so a click on a state, which rewrites the file, does not reset the filters */
-  private filter: ListFilter = { ...ALL, state: 'open' }
+  private filter: ListFilter = { ...START }
   /** the abouts, tags and categories the filter bar was built with: any edit fires 'changed', and rebuilding the bar
    * each time would close a dropdown open under the user */
   private options = ''
+  private search: HTMLInputElement
   private bar: HTMLElement
   private list: HTMLElement
 
@@ -230,8 +235,17 @@ export class TaskListView extends ItemView {
     private index: TaskIndex,
   ) {
     super(leaf)
+    this.search = this.contentEl.createEl('input', {
+      type: 'search',
+      cls: 'tide-search',
+      placeholder: t('list.search'),
+    })
+    this.search.addEventListener('input', () => {
+      this.filter.q = this.search.value
+      this.render()
+    })
     this.bar = this.contentEl.createDiv({ cls: 'tide-filters' })
-    this.list = this.contentEl.createDiv()
+    this.list = this.contentEl.createDiv({ cls: 'tide-list' })
   }
 
   getViewType() {
@@ -261,6 +275,19 @@ export class TaskListView extends ItemView {
     }
     this.list.empty()
     const shown = filterTasks(tasks, this.filter)
+    const count = this.list.createDiv({ cls: 'tide-count' })
+    count.createSpan({ text: `${shown.length} de ${tasks.length} ${t('list.count')}` })
+    if (JSON.stringify(this.filter) !== JSON.stringify(START)) {
+      const clear = count.createEl('a', { cls: 'tide-clear', text: t('list.clear'), href: '#' })
+      clear.addEventListener('click', (e) => {
+        e.preventDefault()
+        this.filter = { ...START }
+        this.search.value = ''
+        // the dropdowns keep their old value until the bar is built again
+        this.options = ''
+        this.render()
+      })
+    }
     if (!shown.length) {
       this.list.createDiv({ cls: 'tide-empty', text: t('list.empty') })
       return
@@ -274,16 +301,20 @@ export class TaskListView extends ItemView {
     this.bar.empty()
     const any: [string, string] = ['', t('filter.any')]
     const none: [string, string] = ['-', t('filter.none')]
-    const select = <K extends keyof ListFilter>(key: K, options: [string, string][]) => {
+    const select = <K extends Exclude<keyof ListFilter, 'q'>>(key: K, options: [string, string][]) => {
       const field = this.bar.createEl('label', { cls: 'tide-filter', text: t(`filter.${key}`) })
       const value = this.filter[key]
       // a value gone from the vault, such as a tag just removed, still shows as chosen
       if (value && !options.some(([v]) => v === value)) options.push([value, value])
+      // a filter off its default reads as set, in the accent color
+      const mark = (v: string) => field.toggleClass('tide-filter-set', !!v && !(key === 'state' && v === 'open'))
+      mark(value)
       new DropdownComponent(field)
         .addOptions(Object.fromEntries(options))
         .setValue(value)
         .onChange((value) => {
           this.filter[key] = value as ListFilter[K]
+          mark(value)
           this.render()
         })
     }
@@ -342,44 +373,81 @@ export class AgendaView extends ItemView {
       today,
     )
     if (overdue.length) {
-      const ul = this.section('agenda.overdue', 'tide-agenda-overdue')
-      for (const entry of overdue) this.row(ul, entry).createSpan({ cls: 'tide-date', text: entry.date })
+      const group = this.group('agenda.overdue', 'tide-agenda-overdue')
+      for (const entry of overdue) this.row(group, entry, today)
     }
     if (pending.length) {
-      const ul = this.section('agenda.pending', 'tide-agenda-pending')
-      for (const task of pending) this.row(ul, { task })
+      const group = this.group('agenda.pending', 'tide-agenda-pending')
+      for (const task of pending) this.row(group, { task }, today)
     }
     for (const [i, { date, entries }] of days.entries()) {
-      const heading = this.contentEl.createDiv({ cls: 'tide-agenda-day' })
-      placeLink(this.openPlace, heading, `${date} ${weekday(date)}`, { kind: 'day', key: date })
-      if (date === today) heading.createSpan({ cls: 'tide-agenda-today', text: t('agenda.today') })
+      const cls = `tide-aday${entries.length ? '' : ' tide-aday-empty'}${date === today ? ' tide-aday-today' : ''}`
+      const group = this.contentEl.createDiv({ cls })
+      const heading = group.createDiv({ cls: 'tide-ahead' })
+      placeLink(this.openPlace, heading, dayLabel(date, i), { kind: 'day', key: date })
       // the week and month of the first day, then each new one's
       const prev = days[i - 1]?.date
       const week = isoWeek(date).week
       if (!prev || week !== isoWeek(prev).week) placeLink(this.openPlace, heading, week, { kind: 'week', key: week })
       const month = date.slice(0, 7)
       if (!prev || month !== prev.slice(0, 7)) placeLink(this.openPlace, heading, month, { kind: 'month', key: month })
-      const ul = this.contentEl.createEl('ul', { cls: 'tide-tasks' })
-      for (const entry of entries) this.row(ul, entry)
+      for (const entry of entries) this.row(group, entry, today)
     }
   }
 
-  private section(title: MessageKey, cls: string): HTMLElement {
-    this.contentEl.createDiv({ cls: `tide-agenda-section ${cls}`, text: t(title) })
-    return this.contentEl.createEl('ul', { cls: 'tide-tasks' })
+  private group(title: MessageKey, cls: string): HTMLElement {
+    const group = this.contentEl.createDiv({ cls: `tide-aday ${cls}` })
+    group.createDiv({ cls: 'tide-ahead', text: t(title) })
+    return group
   }
 
-  /** The time, then the row as in the list, the deadline mark, the source and Move to…. */
-  private row(ul: HTMLElement, { task, kind, time }: Pick<AgendaEntry, 'task'> & Partial<AgendaEntry>): HTMLElement {
-    const li = taskRow(ul, this.app, task)
-    if (time) li.prepend(createSpan({ cls: 'tide-time', text: time }))
-    if (kind === 'deadline') li.createSpan({ cls: 'tide-deadline', text: t('block.deadline') })
-    li.createSpan({ cls: 'tide-source', text: task.path.replace(/\.md$/, '') })
-    const move = li.createEl('button', { cls: 'clickable-icon tide-move', attr: { 'aria-label': t('command.moveTo') } })
+  /** One line, as in the org agenda: time, what makes it be there, state and priority, title, tags, Move to…. */
+  private row(
+    parent: HTMLElement,
+    { task, kind, time, date }: Pick<AgendaEntry, 'task'> & Partial<AgendaEntry>,
+    today: string,
+  ) {
+    const { state, priority, title, tags } = task.block
+    const closed = state === 'DONE' || state === 'CANCELED'
+    const row = parent.createDiv({ cls: `tide-arow${closed ? ' tide-closed' : ''}` })
+    row.createSpan({ cls: 'tide-atime', text: time ?? '' })
+    // the plain case says nothing: a deadline, a repeat, how late or done is what is worth a mark
+    const late = date && date < today ? `${daysLate(date, today)}d` : ''
+    const mark = [late, kind === 'deadline' ? (late ? '⚑' : `⚑ ${t('block.deadline')}`) : ''].filter(Boolean).join(' ')
+    const repeats = task.block.scheduled?.repeater ? '↻' : ''
+    row.createSpan({ cls: 'tide-amark', text: mark || repeats || (closed ? '✓' : '') })
+    const kw = row.createSpan({ cls: 'tide-ahead-kw' })
+    if (state) {
+      const button = kw.createEl('button', {
+        cls: `tide-state tide-state-${state.toLowerCase()}`,
+        text: state,
+        attr: { 'aria-label': t('command.nextState') },
+      })
+      button.addEventListener('click', () => void advance(this.app, task))
+    }
+    if (priority) kw.createSpan({ cls: `tide-priority tide-priority-${priority}`, text: `[#${priority}]` })
+    const link = row.createEl('a', { cls: 'tide-title', text: title, href: '#' })
+    link.setAttr('title', task.path.replace(/\.md$/, ''))
+    link.addEventListener('click', (e) => {
+      e.preventDefault()
+      void openAt(this.app, task)
+    })
+    row.createSpan({ cls: 'tide-tags-text', text: tags.length ? `:${tags.join(':')}:` : '' })
+    const move = row.createEl('button', {
+      cls: 'clickable-icon tide-move',
+      attr: { 'aria-label': t('command.moveTo') },
+    })
     setIcon(move, 'forward')
     move.addEventListener('click', () => this.move(task))
-    return li
   }
+}
+
+/** "Hoje · Sáb 31/10", "Amanhã · Dom 01/11", then "Segunda 02/11": the day as the org agenda heads it. */
+function dayLabel(date: string, i: number): string {
+  const day = moment(date, 'YYYY-MM-DD').locale('pt-br')
+  const rest = day.format(i < 2 ? 'ddd D/MM' : 'dddd D/MM').replace('.', '')
+  const text = rest.charAt(0).toUpperCase() + rest.slice(1)
+  return i === 0 ? `${t('agenda.todayLabel')} · ${text}` : i === 1 ? `${t('agenda.tomorrow')} · ${text}` : text
 }
 
 /** A link that opens the note of a place. */
@@ -409,7 +477,7 @@ function taskRow(ul: HTMLElement, app: App, task: ListedTask): HTMLElement {
     })
     button.addEventListener('click', () => void advance(app, task))
   }
-  if (priority) li.createSpan({ cls: 'tide-priority', text: `[#${priority}]` })
+  if (priority) li.createSpan({ cls: `tide-priority tide-priority-${priority}`, text: `[#${priority}]` })
   const link = li.createEl('a', { cls: 'tide-title', text: title, href: '#' })
   // the same mark as in the editor, on every row of a task off the rule, not only the one shown off its place
   const why = offRule(task.block, task.home)
@@ -504,27 +572,108 @@ export class CalendarView extends ItemView {
     const today = this.today()
     const nav = this.contentEl.createDiv({ cls: 'tide-calendar-nav' })
     this.button(nav, 'chevron-left', 'calendar.prev', () => this.go(shiftMonth(this.month, -1)))
-    placeLink(this.openPlace, nav, this.month, { kind: 'month', key: this.month })
+    const name = moment(this.month, 'YYYY-MM').locale('pt-br').format('MMMM YYYY')
+    placeLink(this.openPlace, nav, name.charAt(0).toUpperCase() + name.slice(1), { kind: 'month', key: this.month })
     this.button(nav, 'chevron-right', 'calendar.next', () => this.go(shiftMonth(this.month, 1)))
     nav.createEl('button', { text: t('calendar.today') }).addEventListener('click', () => this.go(today.slice(0, 7)))
 
     const grid = this.contentEl.createDiv({ cls: 'tide-calendar' })
+    const items = [...this.index.all(), ...this.index.events()]
     const weeks = monthWeeks(this.month)
     grid.createDiv()
     for (const day of weeks[0].days) grid.createDiv({ cls: 'tide-calendar-weekday', text: weekday(day) })
     for (const { week, days } of weeks) {
       placeLink(this.openPlace, grid, week.slice(6), { kind: 'week', key: week }).addClass('tide-calendar-week')
       for (const day of days) {
-        const a = placeLink(this.openPlace, grid, String(Number(day.slice(8))), { kind: 'day', key: day })
-        if (!day.startsWith(this.month)) a.addClass('tide-calendar-other')
-        if (day === today) a.addClass('tide-calendar-today')
+        const cell = grid.createDiv({ cls: 'tide-calendar-day' })
+        if (!day.startsWith(this.month)) cell.addClass('tide-calendar-other')
+        if (day === today) cell.addClass('tide-calendar-today')
+        placeLink(this.openPlace, cell, String(Number(day.slice(8))), { kind: 'day', key: day })
+        for (const { task, kind, time } of onDate(items, day)) this.chip(cell, task, kind, time)
       }
     }
+    this.loose(this.index.all())
+  }
+
+  /** The month's open tasks that belong to it but to no day. */
+  private loose(items: ListedTask[]) {
+    const tasks = looseIn(items, this.month)
+    if (!tasks.length) return
+    this.contentEl.createDiv({ cls: 'tide-agenda-section', text: `${this.month} · ${t('calendar.loose')}` })
+    const ul = this.contentEl.createEl('ul', { cls: 'tide-tasks' })
+    for (const task of tasks)
+      taskRow(ul, this.app, task).createSpan({ cls: 'tide-source', text: task.path.replace(/\.md$/, '') })
+  }
+
+  /** A task on its day: the time and the title on one line, a flag on a deadline, its state in the color. */
+  private chip(cell: HTMLElement, task: ListedTask, kind: AgendaEntry['kind'], time: string | null) {
+    const { state, title, scheduled } = task.block
+    const repeats = kind === 'scheduled' && scheduled?.repeater
+    const chip = cell.createDiv({
+      cls: `tide-chip tide-chip-${state?.toLowerCase() ?? 'event'}${repeats ? ' tide-chip-repeat' : ''}`,
+    })
+    const mark = kind === 'deadline' ? '⚑ ' : repeats ? '↻ ' : state === 'DONE' ? '✓ ' : ''
+    chip.setText(`${time ? time + ' ' : ''}${mark}${title}`)
+    chip.setAttr('title', `${state ?? ''} ${task.path.replace(/\.md$/, '')}`.trim())
+    chip.addEventListener('click', () => void openAt(this.app, task))
   }
 
   private button(el: HTMLElement, icon: string, label: MessageKey, click: () => void) {
     const button = el.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': t(label) } })
     setIcon(button, icon)
     button.addEventListener('click', click)
+  }
+}
+
+export const TASKS_VIEW = 'tide-tasks-view'
+
+const TABS = ['list', 'calendar', 'agenda'] as const
+export type TasksTab = (typeof TABS)[number]
+
+/** One panel with the list, the calendar and the agenda as tabs; each tab is the view it was, its content moved in. */
+export class TasksView extends ItemView {
+  private tab: TasksTab = 'list'
+  private buttons = {} as Record<TasksTab, HTMLElement>
+
+  constructor(
+    leaf: WorkspaceLeaf,
+    private tabs: Record<TasksTab, TaskListView | CalendarView | AgendaView>,
+  ) {
+    super(leaf)
+    this.contentEl.addClass('tide-panel')
+    const bar = this.contentEl.createDiv({ cls: 'tide-tabs' })
+    for (const tab of TABS) {
+      this.buttons[tab] = bar.createEl('button', { text: t(`${tab}.title`) })
+      this.buttons[tab].addEventListener('click', () => this.show(tab))
+    }
+    for (const view of Object.values(tabs)) {
+      this.addChild(view)
+      this.contentEl.appendChild(view.contentEl)
+    }
+  }
+
+  getViewType() {
+    return TASKS_VIEW
+  }
+
+  getDisplayText() {
+    return t('tasks.title')
+  }
+
+  getIcon() {
+    return 'check-square'
+  }
+
+  async onOpen() {
+    for (const view of Object.values(this.tabs)) await view.onOpen()
+    this.show(this.tab)
+  }
+
+  show(tab: TasksTab) {
+    this.tab = tab
+    for (const k of TABS) {
+      this.tabs[k].contentEl.toggle(k === tab)
+      this.buttons[k].toggleClass('is-active', k === tab)
+    }
   }
 }

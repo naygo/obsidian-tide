@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { monthDays, monthWeeks, shiftMonth, yearWeeks } from './calendar'
+import { looseIn, monthDays, monthWeeks, shiftMonth, yearWeeks } from './calendar'
+import type { Place } from './ladder'
+import type { ListedTask } from './list'
+import { parseBlock } from './org'
 
 describe('monthWeeks', () => {
   it('gives the ISO weeks of the month, Monday first, with the days of the months around it', () => {
@@ -72,5 +75,39 @@ describe('yearWeeks', () => {
     expect(weeks[0][6]).toBe('2012-01-01')
     expect(weeks[53][0]).toBe('2012-12-31')
     expect(weeks.flat().filter(Boolean)).toHaveLength(366)
+  })
+})
+
+describe('looseIn', () => {
+  const task = (lines: string[], home: Place | null): ListedTask => ({
+    path: 'x.md',
+    line: 0,
+    head: lines[0],
+    block: parseBlock(lines)!,
+    home,
+  })
+  const month: Place = { kind: 'month', key: '2026-10' }
+
+  it('takes the open undated tasks of the month and of its weeks, a week by its Thursday', () => {
+    const tasks = [
+      task(['- TODO mês'], month),
+      // 2026-W40 starts on 2026-09-28 and its Thursday is 2026-10-01, so it is October's
+      task(['- TODO semana'], { kind: 'week', key: '2026-W40' }),
+      // 2026-W settles in September by its Thursday, though it touches October
+      task(['- TODO outra'], { kind: 'week', key: '2026-W39' }),
+      task(['- TODO outro mês'], { kind: 'month', key: '2026-11' }),
+    ]
+    expect(looseIn(tasks, '2026-10').map((t) => t.block.title)).toEqual(['mês', 'semana'])
+  })
+
+  it('leaves out what has a date, is done, or is off the ladder', () => {
+    const tasks = [
+      task(['- TODO a', '  SCHEDULED: <2026-10-05 seg>'], month),
+      task(['- TODO b', '  DEADLINE: <2026-10-05 seg>'], month),
+      task(['- DONE c'], month),
+      task(['- TODO d'], null),
+      task(['- TODO e'], { kind: 'day', key: '2026-10-05' }),
+    ]
+    expect(looseIn(tasks, '2026-10')).toEqual([])
   })
 })

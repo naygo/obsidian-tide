@@ -17,14 +17,55 @@
   align-items: baseline;
 }
 
-.tide-state {
+/* the state as org shows it: bold monospace text in the theme's color, with none of a button's box; the selectors
+   are long so they win over a theme's own button styles, hover and focus included */
+:is(.tide-tasks .tide-task, .tide-arow) button.tide-state,
+:is(.tide-tasks .tide-task, .tide-arow) button.tide-state:hover,
+:is(.tide-tasks .tide-task, .tide-arow) button.tide-state:active,
+:is(.tide-tasks .tide-task, .tide-arow) button.tide-state:focus {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
   font-family: var(--font-monospace);
-  font-size: var(--font-ui-smaller);
+  font-size: 0.9em;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.tide-state-done,
-.tide-state-canceled {
-  color: var(--text-muted);
+:is(.tide-tasks .tide-task, .tide-arow) button.tide-state-todo {
+  color: var(--tide-todo);
+}
+
+:is(.tide-tasks .tide-task, .tide-arow) button.tide-state-doing {
+  color: var(--tide-doing);
+}
+
+:is(.tide-tasks .tide-task, .tide-arow) button.tide-state-done {
+  color: var(--tide-done);
+}
+
+:is(.tide-tasks .tide-task, .tide-arow) button.tide-state-canceled {
+  color: var(--tide-canceled);
+}
+
+.tide-priority-A {
+  color: var(--tide-pri-a);
+}
+
+.tide-priority-B {
+  color: var(--tide-pri-b);
+}
+
+.tide-priority-C {
+  color: var(--tide-pri-c);
+}
+
+.tide-priority {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  font-weight: 700;
 }
 
 .tide-deadline {
@@ -43,26 +84,101 @@
   font-size: var(--font-ui-small);
 }
 
-/* the agenda: the overdue in red, the pending neutral, then a heading per day */
-.tide-agenda-section,
-.tide-agenda-day {
+/* the agenda, as the org agenda: a heading per day, then a line per task in columns */
+.tide-agenda-section {
   display: flex;
   gap: var(--size-4-2);
   margin-top: var(--size-4-3);
   font-weight: var(--font-semibold);
 }
 
-.tide-agenda-overdue,
-.tide-agenda-overdue + .tide-tasks .tide-date {
+.tide-aday {
+  margin-bottom: var(--size-4-3);
+}
+
+.tide-ahead {
+  display: flex;
+  gap: var(--size-4-2);
+  align-items: baseline;
+  padding: var(--size-4-1) 0 var(--size-2-1);
+  margin-bottom: var(--size-2-1);
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+
+.tide-ahead a {
+  color: inherit;
+}
+
+/* the week and the month of the heading's day, quiet at its end */
+.tide-ahead a:nth-child(n + 2) {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-weight: normal;
+}
+
+.tide-ahead a:nth-child(2) {
+  margin-inline-start: auto;
+}
+
+.tide-aday-today .tide-ahead {
+  color: var(--text-accent);
+}
+
+.tide-aday-empty {
+  margin-bottom: var(--size-2-1);
+}
+
+.tide-aday-empty .tide-ahead {
+  border-bottom: none;
+  color: var(--text-faint);
+  font-weight: normal;
+}
+
+.tide-agenda-overdue .tide-ahead,
+.tide-agenda-overdue .tide-amark {
   color: var(--text-error);
 }
 
-.tide-agenda-today {
-  color: var(--text-accent);
-  font-size: var(--font-ui-smaller);
+.tide-arow {
+  display: grid;
+  grid-template-columns: 3em 4.2em auto minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: baseline;
+  padding: 2px 0;
+  font-size: var(--font-ui-small);
 }
 
-.tide-time {
+.tide-arow .tide-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tide-arow.tide-closed .tide-title {
+  opacity: 0.55;
+}
+
+.tide-atime {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+}
+
+.tide-amark {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+
+.tide-ahead-kw {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.tide-tags-text {
+  color: var(--tide-tags);
   font-family: var(--font-monospace);
   font-size: var(--font-ui-smaller);
 }
@@ -71,103 +187,194 @@
   margin-inline-start: auto;
 }
 
+/* Move to… waits for the pointer where there is one */
+@media (hover: hover) {
+  .tide-arow .tide-move {
+    opacity: 0;
+  }
+
+  .tide-arow:hover .tide-move {
+    opacity: 1;
+  }
+}
+
 /* a line off the rule: a repeater outside a list, or a daily's SCHEDULED on another day */
 .tide-off-rule {
   text-decoration: underline wavy var(--text-warning);
   text-underline-offset: 3px;
 }
 
-/* the color themes: the colors of the states and org words; Obsidian's .theme-light/.theme-dark pick the variant */
+/* the color themes: the colors of the states and org words; the base follows Obsidian's mode, each named theme is fixed to its own */
 body {
   --tide-todo: var(--color-red);
   --tide-doing: var(--color-orange);
   --tide-done: var(--color-green);
   --tide-canceled: var(--text-faint);
-  --tide-pri: var(--color-yellow);
   --tide-tags: var(--color-purple);
   --tide-planning: var(--color-cyan);
+  --tide-pri-a: var(--tide-todo);
+  --tide-pri-b: var(--tide-doing);
+  --tide-pri-c: var(--color-blue);
+  --tide-headline-done: var(--tide-canceled);
+  --tide-date: var(--color-purple);
+  --tide-date-line: underline;
+  --tide-drawer: var(--color-cyan);
+  --tide-log: var(--text-faint);
 }
 
-body.tide-theme-doom-one.theme-dark {
+body.tide-theme-doom-one-dark {
   --tide-todo: #ff6c6b;
   --tide-doing: #da8548;
   --tide-done: #98be65;
   --tide-canceled: #5b6268;
-  --tide-pri: #ecbe7b;
   --tide-tags: #c678dd;
   --tide-planning: #46d9ff;
+  --tide-date: #ecbe7b;
+  --tide-drawer: #5b6268;
+  --tide-log: #5b6268;
+  --tide-date-line: none;
 }
 
-body.tide-theme-doom-one.theme-light {
+body.tide-theme-doom-one-light {
   --tide-todo: #e45649;
   --tide-doing: #da8548;
   --tide-done: #50a14f;
   --tide-canceled: #9ca0a4;
-  --tide-pri: #986801;
   --tide-tags: #a626a4;
   --tide-planning: #0184bc;
+  --tide-date: #986801;
+  --tide-drawer: #9ca0a4;
+  --tide-log: #9ca0a4;
+  --tide-date-line: none;
 }
 
-body.tide-theme-gruvbox.theme-dark {
+/* Doom Emacs: the faces of its own org theme, TODO green, DOING violet, DONE grey, CANCELED red, the words quiet */
+body.tide-theme-doom-emacs-dark {
+  --tide-todo: #98be65;
+  --tide-doing: #a9a1e1;
+  --tide-done: #5b6268;
+  --tide-canceled: #ff6c6b;
+  --tide-headline-done: #5b6268;
+  --tide-pri-a: #ff6c6b;
+  --tide-pri-b: #ecbe7b;
+  --tide-pri-c: #98be65;
+  --tide-tags: #84898e;
+  --tide-planning: #84898e;
+  --tide-date: #ecbe7b;
+  --tide-date-line: none;
+  --tide-drawer: #5b6268;
+  --tide-log: #5b6268;
+}
+
+body.tide-theme-doom-emacs-light {
+  --tide-todo: #50a14f;
+  --tide-doing: #b751b6;
+  --tide-done: #9ca0a4;
+  --tide-canceled: #e45649;
+  --tide-headline-done: #9ca0a4;
+  --tide-pri-a: #e45649;
+  --tide-pri-b: #986801;
+  --tide-pri-c: #50a14f;
+  --tide-tags: #85888b;
+  --tide-planning: #85888b;
+  --tide-date: #986801;
+  --tide-date-line: none;
+  --tide-drawer: #9ca0a4;
+  --tide-log: #9ca0a4;
+}
+
+body.tide-theme-gruvbox-dark {
   --tide-todo: #fb4934;
   --tide-doing: #fe8019;
   --tide-done: #b8bb26;
   --tide-canceled: #928374;
-  --tide-pri: #fabd2f;
   --tide-tags: #d3869b;
   --tide-planning: #8ec07c;
+  --tide-date: #b8bb26;
+  --tide-drawer: #bbd9b0;
+  --tide-log: #928374;
+  --tide-date-line: none;
 }
 
-body.tide-theme-gruvbox.theme-light {
+body.tide-theme-gruvbox-light {
   --tide-todo: #9d0006;
   --tide-doing: #af3a03;
   --tide-done: #79740e;
   --tide-canceled: #928374;
-  --tide-pri: #b57614;
   --tide-tags: #8f3f71;
   --tide-planning: #427b58;
+  --tide-date: #076678;
+  --tide-drawer: #b57614;
+  --tide-log: #a89984;
+  --tide-date-line: none;
 }
 
-body.tide-theme-solarized {
+body.tide-theme-solarized-dark {
   --tide-todo: #dc322f;
-  --tide-doing: #cb4b16;
+  --tide-doing: #b58900;
   --tide-done: #859900;
-  --tide-pri: #b58900;
   --tide-tags: #6c71c4;
   --tide-planning: #2aa198;
-}
-
-body.tide-theme-solarized.theme-dark {
+  --tide-date: #268bd2;
+  --tide-drawer: #2aa198;
+  --tide-log: #586e75;
   --tide-canceled: #586e75;
 }
 
-body.tide-theme-solarized.theme-light {
+body.tide-theme-solarized-light {
+  --tide-todo: #dc322f;
+  --tide-doing: #b58900;
+  --tide-done: #859900;
+  --tide-tags: #6c71c4;
+  --tide-planning: #2aa198;
+  --tide-date: #268bd2;
+  --tide-drawer: #2aa198;
+  --tide-log: #93a1a1;
   --tide-canceled: #93a1a1;
 }
 
 /* Mocha in dark, Latte in light */
-body.tide-theme-catppuccin.theme-dark {
+body.tide-theme-catppuccin-dark {
   --tide-todo: #f38ba8;
   --tide-doing: #fab387;
   --tide-done: #a6e3a1;
   --tide-canceled: #6c7086;
-  --tide-pri: #f9e2af;
   --tide-tags: #cba6f7;
   --tide-planning: #89dceb;
+  --tide-date: #89b4fa;
+  --tide-drawer: #94e2d5;
+  --tide-log: #6c7086;
+  --tide-date-line: none;
 }
 
-body.tide-theme-catppuccin.theme-light {
+body.tide-theme-catppuccin-light {
   --tide-todo: #d20f39;
   --tide-doing: #fe640b;
   --tide-done: #40a02b;
   --tide-canceled: #9ca0b0;
-  --tide-pri: #df8e1d;
   --tide-tags: #8839ef;
   --tide-planning: #04a5e5;
+  --tide-date: #1e66f5;
+  --tide-drawer: #179299;
+  --tide-log: #9ca0b0;
+  --tide-date-line: none;
 }
 
-/* the Org visual: the org words of a task in color */
-.tide-kw {
+/* the Org visual: the org words of a task in color, in monospace as org mode draws them */
+.tide-kw,
+.tide-pri,
+.tide-tags,
+.tide-planning,
+.tide-date,
+.tide-drawer,
+.tide-property,
+.tide-log {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
+.tide-kw,
+.tide-pri {
   font-weight: var(--bold-weight);
 }
 
@@ -187,16 +394,44 @@ body.tide-theme-catppuccin.theme-light {
   color: var(--tide-canceled);
 }
 
-.tide-pri {
-  color: var(--tide-pri);
+.tide-pri-A {
+  color: var(--tide-pri-a);
+}
+
+.tide-pri-B {
+  color: var(--tide-pri-b);
+}
+
+.tide-pri-C {
+  color: var(--tide-pri-c);
 }
 
 .tide-tags {
   color: var(--tide-tags);
 }
 
-.tide-planning {
+.tide-planning,
+.tide-property {
   color: var(--tide-planning);
+}
+
+.tide-date {
+  color: var(--tide-date);
+  text-decoration: var(--tide-date-line);
+  text-underline-offset: 2px;
+}
+
+.tide-drawer {
+  color: var(--tide-drawer);
+}
+
+.tide-log {
+  color: var(--tide-log);
+}
+
+/* a DONE or CANCELED heading is dimmed, never struck */
+.cm-line.tide-headline-done {
+  color: var(--tide-headline-done);
 }
 
 /* the Padrão visual: the checkbox stands in for the bullet, as in a `- [ ]` line */
@@ -258,9 +493,35 @@ body.tide-theme-catppuccin.theme-light {
 /* the list view: the filters on top, then the tasks */
 .tide-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--size-4-2);
   margin-bottom: var(--size-4-3);
+}
+
+/* the panel's width, not the window's, decides the columns */
+.tide-panel {
+  container-type: inline-size;
+}
+
+@container (max-width: 300px) {
+  .tide-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tide-filter select {
+  width: 100%;
+  min-width: 0;
+}
+
+.tide-filter.tide-filter-set {
+  color: var(--text-accent);
+}
+
+/* the list: a quiet line between tasks */
+.tide-list .tide-task {
+  padding: var(--size-4-1) 0;
+  border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .tide-filter {
@@ -285,15 +546,13 @@ body.tide-theme-catppuccin.theme-light {
 
 .tide-calendar {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: var(--size-2-2);
+  grid-template-columns: auto repeat(7, minmax(0, 1fr));
+  gap: var(--size-2-1);
   margin-top: var(--size-4-3);
   text-align: center;
 }
 
 .tide-calendar a {
-  padding: var(--size-2-2);
-  border-radius: var(--radius-s);
   color: var(--text-normal);
   text-decoration: none;
 }
@@ -302,16 +561,71 @@ body.tide-theme-catppuccin.theme-light {
   background: var(--background-modifier-hover);
 }
 
-.tide-calendar-weekday,
-.tide-calendar a.tide-calendar-week,
-.tide-calendar a.tide-calendar-other {
-  color: var(--text-faint);
+.tide-calendar a.tide-calendar-week {
+  padding: var(--size-2-2);
+  border-radius: var(--radius-s);
+}
+
+/* a day: its number, then a chip per task that falls on it */
+.tide-calendar-day {
+  min-height: 64px;
+  padding: var(--size-2-1);
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  text-align: start;
+}
+
+.tide-calendar-day > a {
   font-size: var(--font-ui-smaller);
 }
 
-.tide-calendar a.tide-calendar-today {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
+.tide-calendar-day.tide-calendar-other {
+  opacity: 0.45;
+}
+
+.tide-calendar-day.tide-calendar-today {
+  outline: 2px solid var(--interactive-accent);
+}
+
+.tide-chip {
+  margin-top: var(--size-2-1);
+  padding: 1px var(--size-2-2);
+  overflow: hidden;
+  border-left: 3px solid currentColor;
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tide-chip-todo {
+  color: var(--color-red);
+}
+
+.tide-chip-doing {
+  color: var(--color-orange);
+}
+
+.tide-chip-done {
+  color: var(--color-green);
+}
+
+.tide-chip-repeat {
+  border-left-style: dashed;
+}
+
+.tide-chip-canceled,
+.tide-chip-event {
+  color: var(--text-faint);
+}
+
+.tide-calendar-weekday,
+.tide-calendar a.tide-calendar-week {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
 }
 
 /* the habits view: the month board scrolls sideways under a habit or day column that stays put */
@@ -321,13 +635,17 @@ body.tide-theme-catppuccin.theme-light {
 }
 
 .tide-board {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .tide-board th,
 .tide-board td {
-  padding: var(--size-2-1) var(--size-2-2);
+  padding: 0;
+  height: 30px;
+  min-width: 30px;
 }
 
 .tide-board thead th {
@@ -339,14 +657,45 @@ body.tide-theme-catppuccin.theme-light {
 .tide-board tbody th {
   position: sticky;
   left: 0;
+  z-index: 1;
   background: var(--background-primary);
+  padding-inline: var(--size-2-2) var(--size-4-3);
   text-align: start;
+  font-weight: normal;
   white-space: nowrap;
+}
+
+.tide-board tbody tr:not(:last-child) > * {
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.tide-board tbody tr:hover > * {
+  background-color: var(--background-modifier-hover);
+}
+
+.tide-board tbody tr:hover > th {
+  background:
+    linear-gradient(var(--background-modifier-hover), var(--background-modifier-hover)), var(--background-primary);
+}
+
+/* a checkbox in the habit's color; a habit without one takes the accent */
+.tide-board :where(td) {
+  --checkbox-color: currentColor;
+  --checkbox-color-hover: currentColor;
+  color: var(--interactive-accent);
+}
+
+.tide-board td input[type='checkbox'] {
+  margin: 0;
 }
 
 .tide-board th.tide-board-today {
   color: var(--interactive-accent);
   font-weight: var(--font-semibold);
+}
+
+.tide-board td.tide-board-today {
+  background-color: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
 }
 
 /* a day off the planned ones: a mark there counts the same, so it stays clickable */
@@ -355,12 +704,33 @@ body.tide-theme-catppuccin.theme-light {
 }
 
 .tide-board td.tide-board-ahead {
-  background: var(--background-modifier-hover);
   color: var(--text-faint);
 }
 
-.tide-board-amount {
-  min-width: 2.5em;
+/* a number in a cell: flat, the size of a checkbox's cell, tinted in the habit's color once filled */
+.tide-board .tide-board-amount {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px dashed var(--background-modifier-border-hover);
+  border-radius: var(--radius-s);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+}
+
+.tide-board .tide-board-amount.tide-board-filled {
+  border: none;
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  color: inherit;
+  font-weight: var(--font-semibold);
+}
+
+.tide-board .tide-board-field {
+  width: 4em;
+  height: 22px;
+  font-size: var(--font-ui-smaller);
 }
 
 /* a day a context pauses: striped, still clickable, ahead too */
@@ -376,7 +746,14 @@ body.tide-theme-catppuccin.theme-light {
   display: flex;
   gap: var(--size-4-2);
   align-items: center;
-  margin-top: var(--size-4-2);
+  margin-top: var(--size-4-4);
+  margin-bottom: var(--size-2-2);
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.tide-year-name + .tide-board-scroll {
+  margin-top: 0;
 }
 
 /* the year of a habit: a column per week from Monday, a square per day filled where marked, in the habit's color */
@@ -391,7 +768,7 @@ body.tide-theme-catppuccin.theme-light {
 
 .tide-year-day {
   border-radius: 2px;
-  background: var(--background-modifier-border);
+  background: var(--background-modifier-hover);
 }
 
 .tide-year-day.tide-year-marked {
@@ -469,4 +846,48 @@ body.tide-theme-catppuccin.theme-light {
 }
 .tide-habit-pink {
   color: var(--color-pink);
+}
+
+/* the tasks panel: the list, the calendar and the agenda as one segmented control across the top */
+.tide-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 2px;
+  margin-bottom: var(--size-4-3);
+  border-radius: var(--radius-m);
+  background: var(--background-modifier-hover);
+}
+
+.tide-tabs button {
+  height: auto;
+  padding: var(--size-4-1) 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.tide-tabs button.is-active {
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-shadow: var(--shadow-s);
+}
+
+/* a tab's content sits in the panel's own padding */
+.tide-tabs ~ .view-content {
+  padding: 0;
+}
+
+.tide-search {
+  width: 100%;
+  margin-bottom: var(--size-4-2);
+}
+
+.tide-count {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--size-2-2);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
 }

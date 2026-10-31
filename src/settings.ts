@@ -4,14 +4,11 @@ import { t } from './i18n'
 import { type PlaceSettings, parseMarker } from './ladder'
 import type TidePlugin from './main'
 import type { PeriodSettings } from './periods'
+import { THEMES, type Theme } from './themes'
 
 /** What the settings tab saves; the days come from the core Daily notes instead. */
 export type TideSettings = Omit<PlaceSettings, 'dayOf'> &
   PeriodSettings & { habitMarker: string; contextMarker: string; visual: Visual; theme: Theme }
-
-/** The color themes; each has a light and a dark variant, picked by Obsidian's mode in styles.css. */
-export const THEMES = ['obsidian', 'doom-one', 'gruvbox', 'solarized', 'catppuccin'] as const
-export type Theme = (typeof THEMES)[number]
 
 export const DEFAULT_SETTINGS: TideSettings = {
   periodsFolder: '',
@@ -120,8 +117,8 @@ export class TextModal extends Modal {
   }
 }
 
-/** Creates a list, habit or context note with the configured marker and opens it. */
-export async function createMarked(app: App, marker: string, name: string) {
+/** Creates a list, habit or context note with the configured marker, plus `extra` properties, and opens it. */
+export async function createMarked(app: App, marker: string, name: string, extra: Record<string, unknown> = {}) {
   const m = parseMarker(marker)
   const path = normalizePath('folder' in m ? `${m.folder}/${name}.md` : `${name}.md`)
   if (app.vault.getAbstractFileByPath(path)) {
@@ -137,10 +134,11 @@ export async function createMarked(app: App, marker: string, name: string) {
     new Notice(t('newNote.invalid'))
     return
   }
-  if ('property' in m) {
+  if ('property' in m || Object.keys(extra).length) {
     await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
       // links go in a list, as in `categories`; any other value stays a plain property
-      fm[m.property] = m.value.startsWith('[[') ? [m.value] : m.value
+      if ('property' in m) fm[m.property] = m.value.startsWith('[[') ? [m.value] : m.value
+      Object.assign(fm, extra)
     })
   }
   await app.workspace.getLeaf(false).openFile(file)

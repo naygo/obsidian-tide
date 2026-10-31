@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agenda } from './agenda'
+import { agenda, daysLate, onDate } from './agenda'
 import type { Place } from './ladder'
 import type { ListedTask } from './list'
 import { parseBlock } from './org'
@@ -98,5 +98,22 @@ describe('agenda', () => {
   it('leaves out what lives off the ladder', () => {
     const a = agenda([item(['- TODO a', '  SCHEDULED: <2026-10-30 sex>'], null)], [], TODAY)
     expect(dayOf(a, TODAY)).toEqual([])
+  })
+})
+
+describe('onDate', () => {
+  it('is the agenda day for any date, a month away too, and skips what is off the ladder', () => {
+    const a = item(['- TODO a', '  SCHEDULED: <2026-12-05 sáb 09:00>'])
+    const off = item(['- TODO b', '  SCHEDULED: <2026-12-05 sáb>'], null)
+    expect(onDate([a, off], '2026-12-05').map((e) => e.task.block.title)).toEqual(['a'])
+    expect(onDate([a, off], '2026-12-06')).toEqual([])
+  })
+})
+
+describe('daysLate', () => {
+  it('counts the days across a month, and is 0 for today and ahead', () => {
+    expect(daysLate('2026-10-28', '2026-11-01')).toBe(4)
+    expect(daysLate('2026-11-01', '2026-11-01')).toBe(0)
+    expect(daysLate('2026-11-05', '2026-11-01')).toBe(0)
   })
 })

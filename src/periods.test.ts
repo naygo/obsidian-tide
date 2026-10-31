@@ -26,7 +26,7 @@ describe('dailyNote', () => {
   })
 
   it('has a deterministic default without Daily.base', () => {
-    expect(DAILY_TEMPLATE).toBe('```tide-tasks\n```\n\n```tide-habits\n```\n\n## Notas\n')
+    expect(DAILY_TEMPLATE).toBe('```tide-tasks\n```\n\n## Notas\n')
   })
 })
 

@@ -9,6 +9,7 @@ import {
   progress,
   propertyUsed,
   renameMark,
+  seedHabits,
   setAmount,
   toggleMark,
 } from './habits'
@@ -90,10 +91,12 @@ describe('toggleMark', () => {
     expect(fm).toEqual({ tags: ['x'], gym: true })
   })
 
-  it('deletes the property of a marked habit, never writing false', () => {
+  it('writes false on a marked habit, keeping it in the properties', () => {
     const fm: Record<string, unknown> = { gym: true }
     toggleMark(fm, 'gym')
-    expect(fm).toEqual({})
+    expect(fm).toEqual({ gym: false })
+    toggleMark(fm, 'gym')
+    expect(fm).toEqual({ gym: true })
   })
 })
 
@@ -143,12 +146,35 @@ describe('setAmount', () => {
     expect(fm).toEqual({ água: 2 })
   })
 
-  it('deletes the property on 0 or no number, never writing 0', () => {
+  it('writes 0 on 0 or no number, keeping it in the properties', () => {
     for (const n of [0, NaN, -1]) {
       const fm: Record<string, unknown> = { água: 2 }
       setAmount(fm, 'água', n)
-      expect(fm).toEqual({})
+      expect(fm).toEqual({ água: 0 })
     }
+  })
+})
+
+describe('seedHabits', () => {
+  // 2026-10-31 is a Saturday
+  const habits = [
+    habitOf('gym.md', { days: ['mon'] }),
+    habitOf('leitura.md', null),
+    habitOf('água.md', { unit: 'copos' }),
+    habitOf('Casa.md', null),
+    habitOf('velho.md', { archived: true }),
+  ]
+
+  it('writes the planned habits unmarked, skipping the paused, the archived and the off days', () => {
+    const fm: Record<string, unknown> = { tags: ['daily'] }
+    seedHabits(fm, habits, '2026-10-31', new Set(['casa']))
+    expect(fm).toEqual({ tags: ['daily'], leitura: false, água: 0 })
+  })
+
+  it('keeps a mark already there', () => {
+    const fm: Record<string, unknown> = { leitura: true }
+    seedHabits(fm, habits, '2026-10-31', new Set())
+    expect(fm).toEqual({ leitura: true, água: 0, Casa: false })
   })
 })
 
@@ -261,5 +287,14 @@ describe('renameMark', () => {
     const amount: Record<string, unknown> = { agua: 2, água: 3 }
     renameMark(amount, 'agua', 'água')
     expect(amount).toEqual({ água: 5 })
+  })
+
+  it('adds nothing from an unmarked key, and a mark replaces an unmarked one', () => {
+    const off: Record<string, unknown> = { gym: false, musculação: true }
+    renameMark(off, 'gym', 'musculação')
+    expect(off).toEqual({ musculação: true })
+    const on: Record<string, unknown> = { gym: true, musculação: false }
+    renameMark(on, 'gym', 'musculação')
+    expect(on).toEqual({ musculação: true })
   })
 })

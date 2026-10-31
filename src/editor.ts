@@ -12,7 +12,7 @@ import {
 import { editorInfoField, editorLivePreviewField } from 'obsidian'
 import { enterAt, findBlock, orgAction, summary, taskFolds } from './actions'
 import { t } from './i18n'
-import { type State, parseHead } from './org'
+import { type State, facesOf, parseHead } from './org'
 
 /** How tasks look in Live Preview: org text in colors, or Obsidian's checkbox with the details folded. */
 export type Visual = 'org' | 'standard'
@@ -155,11 +155,20 @@ function decorate(state: EditorState, visual: Visual): DecorationSet {
       marks.push(mark('tide-planning').range(at, at + planning[2].length + 1))
     }
     const head = parseHead(lines[i])
+    // ponytail: only a head or an indented line gets the drawer, log and date faces, so prose keeps its `<2026-10-31>`;
+    // an indented line that is no task's still does
+    if (visual === 'org' && (head?.state || /^\s/.test(lines[i])))
+      for (const f of facesOf(lines[i])) marks.push(mark(f.cls).range(from + f.from, from + f.to))
     if (!head?.state) continue
     const kw = from + head.indent.length + 2
     if (visual === 'org') {
+      if (head.state === 'DONE' || head.state === 'CANCELED')
+        marks.push(Decoration.line({ class: 'tide-headline-done' }).range(from))
       marks.push(mark(`tide-kw tide-kw-${head.state.toLowerCase()}`).range(kw, kw + head.state.length))
-      if (head.priority) marks.push(mark('tide-pri').range(kw + head.state.length + 1, kw + head.state.length + 5))
+      if (head.priority)
+        marks.push(
+          mark(`tide-pri tide-pri-${head.priority}`).range(kw + head.state.length + 1, kw + head.state.length + 5),
+        )
       if (head.tags.length) marks.push(mark('tide-tags').range(to - head.tags.join(':').length - 2, to))
       continue
     }

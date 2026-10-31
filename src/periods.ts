@@ -22,7 +22,7 @@ export interface NoteSpec {
 }
 
 // Deterministic, with no time or stamp: two devices creating the same day write the same file, so git merges it.
-export const DAILY_TEMPLATE = '```tide-tasks\n```\n\n```tide-habits\n```\n\n## Notas\n'
+export const DAILY_TEMPLATE = '```tide-tasks\n```\n\n## Notas\n'
 export const PERIOD_TEMPLATE = '```tide-tasks\n```\n'
 export const DAILY_FORMAT = 'YYYY-MM-DD'
 
