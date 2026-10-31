@@ -658,38 +658,24 @@ export default class TidePlugin extends Plugin {
       callback: () => void this.openView(CALENDAR_VIEW),
     })
 
-    this.addCommand({
-      id: 'new-list',
-      name: t('command.newList'),
-      callback: () =>
-        new TextModal(
-          this.app,
-          { title: t('command.newList'), label: t('newNote.name'), button: t('newNote.create') },
-          (name) => void createMarked(this.app, this.settings.listMarker, name),
-        ).open(),
-    })
-
-    this.addCommand({
-      id: 'new-habit',
-      name: t('command.newHabit'),
-      callback: () =>
-        new TextModal(
-          this.app,
-          { title: t('command.newHabit'), label: t('newNote.name'), button: t('newNote.create') },
-          (name) => void this.createHabit(name),
-        ).open(),
-    })
-
-    this.addCommand({
-      id: 'new-context',
-      name: t('command.newContext'),
-      callback: () =>
-        new TextModal(
-          this.app,
-          { title: t('command.newContext'), label: t('newNote.name'), button: t('newNote.create') },
-          (name) => void createMarked(this.app, this.settings.contextMarker, name),
-        ).open(),
-    })
+    // a note named in a modal: a list or a context with its marker, a habit refused if its name is a property
+    const NEW_NOTES: [string, MessageKey, (name: string) => Promise<void>][] = [
+      ['new-list', 'command.newList', (name) => createMarked(this.app, this.settings.listMarker, name)],
+      ['new-habit', 'command.newHabit', (name) => this.createHabit(name)],
+      ['new-context', 'command.newContext', (name) => createMarked(this.app, this.settings.contextMarker, name)],
+    ]
+    for (const [id, title, create] of NEW_NOTES) {
+      this.addCommand({
+        id,
+        name: t(title),
+        callback: () =>
+          new TextModal(
+            this.app,
+            { title: t(title), label: t('newNote.name'), button: t('newNote.create') },
+            (name) => void create(name),
+          ).open(),
+      })
+    }
 
     // on the context note open: its pause is copied into a new line at the end, never into an existing one
     this.addCommand({

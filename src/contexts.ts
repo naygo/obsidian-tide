@@ -7,7 +7,7 @@ export interface Declaration {
 }
 
 const DATE = String.raw`\d{4}-\d{2}-\d{2}`
-const LINK = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g
+const LINK = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g
 const DECLARATION = new RegExp(String.raw`^\s*[-*]\s+(${DATE})\s*(?:→|->)\s*(${DATE})((?:\s*\[\[[^\]]+\]\])+)\s*$`)
 
 const noteName = (link: string) => link.slice(link.lastIndexOf('/') + 1).trim()

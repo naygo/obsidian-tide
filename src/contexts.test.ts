@@ -18,6 +18,10 @@ describe('parseDeclaration', () => {
     })
   })
 
+  it('takes the note of a link to a heading', () => {
+    expect(parseDeclaration('- 2026-11-01 → 2026-11-07 [[gym#Treino]]')?.habits).toEqual(['gym'])
+  })
+
   it('is no declaration without both dates or without a link', () => {
     expect(parseDeclaration('- 2026-11-01 [[gym]]')).toBeNull()
     expect(parseDeclaration('- 2026-11-01 → 2026-11-07')).toBeNull()
