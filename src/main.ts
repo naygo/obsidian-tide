@@ -17,7 +17,7 @@ import {
 import { type Action, type Change, diffLines, findBlock, orgAction } from './actions'
 import { foldTasks, tideEditor } from './editor'
 import { type Habit, amountOf, habitOf, orphanKeys, propertyUsed, renameMark } from './habits'
-import { HabitsBlock } from './habitViews'
+import { HABITS_VIEW, HabitsBlock, HabitsView } from './habitViews'
 import { declarationLine, parseInterval, pausedOn } from './contexts'
 import { type SuggestContext, type Suggestion, type Suggestions, orgSuggest } from './complete'
 import { type MessageKey, t } from './i18n'
@@ -419,13 +419,14 @@ export default class TidePlugin extends Plugin {
     if (file) await this.app.workspace.getLeaf(false).openFile(file)
   }
 
-  /** Opens a view in the right sidebar, or the one already open. */
-  private async openView(type: string) {
-    const leaf = this.app.workspace.getLeavesOfType(type)[0] ?? this.app.workspace.getRightLeaf(false)
+  /** Opens a view in the right sidebar, or in a tab when it is too wide for one, or the one already open. */
+  private async openView(type: string, tab = false) {
+    const { workspace } = this.app
+    const leaf = workspace.getLeavesOfType(type)[0] ?? (tab ? workspace.getLeaf('tab') : workspace.getRightLeaf(false))
     if (!leaf) return
     await leaf.setViewState({ type, active: true })
     // revealLeaf needs minAppVersion 1.7.2; a collapsed sidebar, or the closed drawer on a phone, opens here
-    if (leaf.getRoot() === this.app.workspace.rightSplit) this.app.workspace.rightSplit.expand()
+    if (leaf.getRoot() === workspace.rightSplit) workspace.rightSplit.expand()
   }
 
   /** Migrate pending to today: each file's pending blocks go to the end of today's daily first, then leave the file. */
@@ -574,6 +575,13 @@ export default class TidePlugin extends Plugin {
     }
     const habits = this.habits().map((h) => h.name)
     new PickModal(this.app, habits, t('orphan.pickHabit'), (name) => void this.renameMarks(key, name)).open()
+  }
+
+  /** The frontmatter of each daily, by date. */
+  private dailyMarks(): Record<string, Record<string, unknown>> {
+    const marks: Record<string, Record<string, unknown>> = {}
+    for (const f of this.dailies()) marks[dayOf(this.daily, f.path)!] = this.frontmatter(f) ?? {}
+    return marks
   }
 
   /** The habit's amount in each daily that has it, by date. */
@@ -738,6 +746,25 @@ export default class TidePlugin extends Plugin {
       id: 'open-calendar',
       name: t('command.openCalendar'),
       callback: () => void this.openView(CALENDAR_VIEW),
+    })
+
+    this.registerView(
+      HABITS_VIEW,
+      (leaf) =>
+        new HabitsView(
+          leaf,
+          () => this.habits(),
+          () => this.dailyMarks(),
+          today,
+          (date, edit) => void this.markHabit(date, edit),
+          this.index,
+        ),
+    )
+    // a month of days across doesn't fit the sidebar
+    this.addCommand({
+      id: 'open-habits',
+      name: t('command.openHabits'),
+      callback: () => void this.openView(HABITS_VIEW, true),
     })
 
     // a note named in a modal: a list or a context with its marker, a habit refused if its name is a property

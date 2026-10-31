@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { monthWeeks, shiftMonth } from './calendar'
+import { monthDays, monthWeeks, shiftMonth } from './calendar'
 
 describe('monthWeeks', () => {
   it('gives the ISO weeks of the month, Monday first, with the days of the months around it', () => {
@@ -40,5 +40,19 @@ describe('shiftMonth', () => {
     expect(shiftMonth('2026-12', 1)).toBe('2027-01')
     expect(shiftMonth('2026-01', -1)).toBe('2025-12')
     expect(shiftMonth('2026-10', 0)).toBe('2026-10')
+  })
+})
+
+describe('monthDays', () => {
+  it('gives every day of the month and none of the months around it', () => {
+    const days = monthDays('2026-10')
+    expect(days).toHaveLength(31)
+    expect(days[0]).toBe('2026-10-01')
+    expect(days[30]).toBe('2026-10-31')
+  })
+
+  it('ends February on the 28th, or the 29th in a leap year', () => {
+    expect(monthDays('2026-02').pop()).toBe('2026-02-28')
+    expect(monthDays('2028-02').pop()).toBe('2028-02-29')
   })
 })

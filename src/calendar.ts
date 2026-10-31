@@ -15,3 +15,6 @@ export function monthWeeks(month: string): { week: string; days: string[] }[] {
 
 /** The YYYY-MM month `n` months away. */
 export const shiftMonth = (month: string, n: number) => shiftDate(`${month}-01`, `+${n}m`).slice(0, 7)
+
+/** The days of a YYYY-MM month, the 1st first. */
+export const monthDays = (month: string) => monthWeeks(month).flatMap((w) => w.days.filter((d) => d.startsWith(month)))

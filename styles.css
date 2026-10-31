@@ -314,6 +314,54 @@ body.tide-theme-catppuccin.theme-light {
   color: var(--text-on-accent);
 }
 
+/* the habits view: the month board scrolls sideways under a habit or day column that stays put */
+.tide-board-scroll {
+  overflow-x: auto;
+  margin-top: var(--size-4-3);
+}
+
+.tide-board {
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.tide-board th,
+.tide-board td {
+  padding: var(--size-2-1) var(--size-2-2);
+}
+
+.tide-board thead th {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-weight: normal;
+}
+
+.tide-board tbody th {
+  position: sticky;
+  left: 0;
+  background: var(--background-primary);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.tide-board th.tide-board-today {
+  color: var(--interactive-accent);
+  font-weight: var(--font-semibold);
+}
+
+/* a day off the planned ones: a mark there counts the same, so it stays clickable */
+.tide-board td.tide-board-off {
+  opacity: 0.5;
+}
+
+.tide-board td.tide-board-ahead {
+  background: var(--background-modifier-hover);
+}
+
+.tide-board-amount {
+  min-width: 2.5em;
+}
+
 /* the tide-habits block: a checkbox or a number per habit planned on the day, in the habit's color; others folded */
 .tide-habits {
   list-style: none;

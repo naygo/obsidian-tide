@@ -21,6 +21,7 @@ const ptBR = {
   'command.openAgenda': 'Abrir agenda',
   'command.openCalendar': 'Abrir calendário',
   'command.capture': 'Capturar na Inbox',
+  'command.openHabits': 'Abrir hábitos',
   // the calendar view: the month navigation
   'calendar.title': 'Calendário',
   'calendar.prev': 'Mês anterior',
@@ -99,6 +100,10 @@ const ptBR = {
   'habits.per.week': 'na semana',
   'habits.per.month': 'no mês',
   'habits.per.year': 'no ano',
+  // the habits view: the month board, whose future cells are read-only
+  'habits.title': 'Hábitos',
+  'habits.ahead': 'À frente',
+  'habits.empty': 'Nenhum hábito ainda. Crie um com Novo hábito.',
   'settings.periodsFolder': 'Pasta dos períodos',
   'settings.periodsFolder.desc': 'Onde ficam os arquivos de semana, mês e ano. Vazio é a raiz do vault.',
   'settings.inbox': 'Arquivo da Inbox',
