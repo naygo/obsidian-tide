@@ -33,7 +33,17 @@ import { migrate, moveBlock } from './move'
 import { parseBlock } from './org'
 import { DAILY_FORMAT, type DailyConfig, type NoteSpec, dailyName, dailyNote, periodNote } from './periods'
 import { DEFAULT_SETTINGS, NewListModal, THEMES, type TideSettings, TideSettingTab } from './settings'
-import { LIST_VIEW, TaskIndex, TaskListView, TasksBlock, fileAt } from './tasks'
+import {
+  AGENDA_VIEW,
+  AgendaView,
+  LIST_VIEW,
+  type TaskAt,
+  TaskIndex,
+  TaskListView,
+  TasksBlock,
+  fileAt,
+  headAt,
+} from './tasks'
 
 const KEYS: [string, Exclude<Action, 'nextBox'>][] = [
   ['Shift-ArrowRight', 'nextState'],
@@ -337,18 +347,47 @@ export default class TidePlugin extends Plugin {
     if (!result) return
     // only a block that leaves needs the destination, so a postpone never creates a note
     if (result.moved) {
-      const file =
-        dest.kind === 'day'
-          ? await this.day(dest.key)
-          : dest.kind === 'list'
-            ? await createIfMissing(this.app, { path: dest.key, template: null, fallback: '' })
-            : await this.period(dest.key)
+      const file = await this.destination(dest)
       if (!file) return
       await this.app.vault.process(file, (data) => appendBlock(data, result.moved!))
       // edited meanwhile: the cut would land on the wrong lines, so the block stays in both places
       if (editor.getValue() !== lines.join('\n')) return
     }
     applyChanges(editor, diffLines(lines, result.source))
+  }
+
+  /** Move to… from a view, on the task as indexed: written at the destination first, then cut from its file. */
+  private async moveTask(task: TaskAt, dest: Place) {
+    const from = fileAt(this.app, task.path)
+    if (!from) return
+    const data = await this.app.vault.read(from)
+    const lines = data.split('\n')
+    const at = headAt(lines, task)
+    const result = at < 0 ? null : moveBlock(lines, at, this.placeOfFile(from), dest, today())
+    if (!result) return
+    if (result.moved) {
+      const file = await this.destination(dest)
+      if (!file) return
+      await this.app.vault.process(file, (d) => appendBlock(d, result.moved!))
+    }
+    // edited meanwhile: the cut would land on the wrong lines, so the block stays in both places
+    await this.app.vault.process(from, (d) => (d === data ? result.source.join('\n') : d))
+  }
+
+  /** The note of a place, created when missing. */
+  private destination(dest: Place): Promise<TFile | null> {
+    if (dest.kind === 'day') return this.day(dest.key)
+    if (dest.kind === 'list') return createIfMissing(this.app, { path: dest.key, template: null, fallback: '' })
+    return this.period(dest.key)
+  }
+
+  /** Opens a view in the right sidebar, or the one already open. */
+  private async openView(type: string) {
+    const leaf = this.app.workspace.getLeavesOfType(type)[0] ?? this.app.workspace.getRightLeaf(false)
+    if (!leaf) return
+    await leaf.setViewState({ type, active: true })
+    // revealLeaf needs minAppVersion 1.7.2; a collapsed sidebar, or the closed drawer on a phone, opens here
+    if (leaf.getRoot() === this.app.workspace.rightSplit) this.app.workspace.rightSplit.expand()
   }
 
   /** Migrate pending to today: each file's pending blocks go to the end of today's daily first, then leave the file. */
@@ -486,13 +525,25 @@ export default class TidePlugin extends Plugin {
     this.addCommand({
       id: 'open-list',
       name: t('command.openList'),
-      callback: async () => {
-        const leaf = this.app.workspace.getLeavesOfType(LIST_VIEW)[0] ?? this.app.workspace.getRightLeaf(false)
-        if (!leaf) return
-        await leaf.setViewState({ type: LIST_VIEW, active: true })
-        // revealLeaf needs minAppVersion 1.7.2; a collapsed sidebar, or the closed drawer on a phone, opens here
-        if (leaf.getRoot() === this.app.workspace.rightSplit) this.app.workspace.rightSplit.expand()
-      },
+      callback: () => void this.openView(LIST_VIEW),
+    })
+
+    this.registerView(
+      AGENDA_VIEW,
+      (leaf) =>
+        new AgendaView(
+          leaf,
+          this.index,
+          today,
+          (place) =>
+            void this.destination(place).then((file) => file && this.app.workspace.getLeaf(false).openFile(file)),
+          (task) => new MoveModal(this.app, this.moveTargets(), (dest) => void this.moveTask(task, dest)).open(),
+        ),
+    )
+    this.addCommand({
+      id: 'open-agenda',
+      name: t('command.openAgenda'),
+      callback: () => void this.openView(AGENDA_VIEW),
     })
 
     this.addCommand({

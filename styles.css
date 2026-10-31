@@ -41,6 +41,34 @@
   font-size: var(--font-ui-small);
 }
 
+/* the agenda: the overdue in red, the pending neutral, then a heading per day */
+.tide-agenda-section,
+.tide-agenda-day {
+  display: flex;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-3);
+  font-weight: var(--font-semibold);
+}
+
+.tide-agenda-overdue,
+.tide-agenda-overdue + .tide-tasks .tide-date {
+  color: var(--text-error);
+}
+
+.tide-agenda-today {
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+}
+
+.tide-time {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+}
+
+.tide-move {
+  margin-inline-start: auto;
+}
+
 /* a line off the rule: a repeater outside a list, or a daily's SCHEDULED on another day */
 .tide-off-rule {
   text-decoration: underline wavy var(--text-warning);

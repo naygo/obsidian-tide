@@ -122,10 +122,14 @@ export function parseBlock(lines: string[]): OrgBlock | null {
 
 /** The weekday is decorative: the parser skips it and it is written from the date, in the UI language. */
 export function formatTimestamp(ts: Timestamp, active: boolean): string {
-  const [y, m, d] = ts.date.split('-').map(Number)
-  const weekday = t(`weekday.${new Date(y, m - 1, d).getDay()}` as MessageKey)
-  const inner = [ts.date, weekday, ts.time, ts.repeater].filter(Boolean).join(' ')
+  const inner = [ts.date, weekday(ts.date), ts.time, ts.repeater].filter(Boolean).join(' ')
   return active ? `<${inner}>` : `[${inner}]`
+}
+
+/** The weekday of a YYYY-MM-DD date, abbreviated in the UI language. */
+export function weekday(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return t(`weekday.${new Date(y, m - 1, d).getDay()}` as MessageKey)
 }
 
 /** The local date and time of `d`, as written in CLOSED and :CREATED:. */

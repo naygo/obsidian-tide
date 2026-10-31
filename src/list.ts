@@ -34,6 +34,9 @@ export function aboutOf(b: OrgBlock): string[] {
   return links.length || !value ? links : [value]
 }
 
+/** TODO and DOING: what is still work to do. */
+export const isOpen = (b: OrgBlock) => b.state === 'TODO' || b.state === 'DOING'
+
 export const categoryOf = (b: OrgBlock) => property(b, 'CATEGORY')
 
 /** A filter on an optional value: '' takes all, '-' takes the missing ones. */
@@ -44,8 +47,7 @@ export function filterTasks(tasks: ListedTask[], f: ListFilter): ListedTask[] {
   const rank = (t: ListedTask) => t.block.priority ?? 'D'
   return tasks
     .filter(({ block: b, home }) => {
-      const state =
-        f.state === 'all' || (f.state === 'open' ? b.state === 'TODO' || b.state === 'DOING' : b.state === f.state)
+      const state = f.state === 'all' || (f.state === 'open' ? isOpen(b) : b.state === f.state)
       return (
         state &&
         matches(f.priority, b.priority) &&

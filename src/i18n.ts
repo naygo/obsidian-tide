@@ -13,6 +13,12 @@ const ptBR = {
   'command.fix': 'Corrigir linha fora da regra',
   'command.toggleTasks': 'Recolher ou expandir as tarefas',
   'command.openList': 'Abrir lista de tarefas',
+  'command.openAgenda': 'Abrir agenda',
+  // the agenda view: its sections and the mark on today
+  'agenda.title': 'Agenda',
+  'agenda.overdue': 'Atrasadas',
+  'agenda.pending': 'Pendentes',
+  'agenda.today': 'hoje',
   // the list view and its filters
   'list.title': 'Tarefas',
   'list.empty': 'Nenhuma tarefa com esses filtros.',

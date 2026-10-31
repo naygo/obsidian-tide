@@ -1,13 +1,25 @@
-import { type App, DropdownComponent, Events, ItemView, MarkdownRenderChild, TFile, type WorkspaceLeaf } from 'obsidian'
+import {
+  type App,
+  DropdownComponent,
+  Events,
+  ItemView,
+  MarkdownRenderChild,
+  TFile,
+  type WorkspaceLeaf,
+  setIcon,
+} from 'obsidian'
 import { type Change, orgAction } from './actions'
+import { type AgendaEntry, agenda } from './agenda'
 import { type Vocabulary, vocabulary } from './complete'
-import { t } from './i18n'
+import { type MessageKey, t } from './i18n'
 import {
   type Place,
   type PlaceSettings,
   type TaskDate,
   ended,
+  eventsIn,
   indexedDates,
+  isoWeek,
   offRule,
   openUndated,
   placeOf,
@@ -15,7 +27,7 @@ import {
   tasksIn,
 } from './ladder'
 import { ALL, type ListFilter, type ListedTask, filterOptions, filterTasks } from './list'
-import { STATES } from './org'
+import { STATES, weekday } from './org'
 
 /** One task on one of its days: a task with SCHEDULED and DEADLINE on different days is indexed twice. */
 export interface IndexedTask extends TaskDate, ListedTask {
@@ -28,11 +40,13 @@ export interface IndexedTask extends TaskDate, ListedTask {
 export class TaskIndex extends Events {
   private files = new Map<string, IndexedTask[]>()
   /** files of a day, week, month or year with open undated tasks, which are pending once their period is over */
-  private undated = new Map<string, { home: Place; count: number }>()
+  private undated = new Map<string, { home: Place; heads: number[] }>()
   /** tags and categories of every note, on the ladder or not, for the autocomplete */
   private words = new Map<string, Vocabulary>()
   /** every task of every note, once each, for the list view */
   private tasks = new Map<string, ListedTask[]>()
+  /** the events on the ladder, for the agenda: they never count as work */
+  private eventsOf = new Map<string, ListedTask[]>()
 
   constructor(
     private app: App,
@@ -45,6 +59,7 @@ export class TaskIndex extends Events {
     this.files.clear()
     this.words.clear()
     this.tasks.clear()
+    this.eventsOf.clear()
     for (const file of this.app.vault.getMarkdownFiles()) {
       // a file deleted mid-scan must not stop the rest of the vault from being indexed
       const data = await this.app.vault.cachedRead(file).catch(() => null)
@@ -62,12 +77,28 @@ export class TaskIndex extends Events {
     this.words.delete(path)
     const listed = this.tasks.delete(path)
     const dated = this.files.delete(path)
-    if (this.undated.delete(path) || dated || listed) this.trigger('changed')
+    const events = this.eventsOf.delete(path)
+    if (this.undated.delete(path) || dated || listed || events) this.trigger('changed')
   }
 
   /** The files holding pending tasks on `today`, and how many blocks each would migrate. */
   pending(today: string): { path: string; count: number }[] {
-    return [...this.undated].flatMap(([path, { home, count }]) => (ended(home, today) ? [{ path, count }] : []))
+    return [...this.undated].flatMap(([path, { home, heads }]) =>
+      ended(home, today) ? [{ path, count: heads.length }] : [],
+    )
+  }
+
+  /** The pending tasks on `today`, the very blocks Migrate pending to today moves. */
+  pendingTasks(today: string): ListedTask[] {
+    return this.pending(today).flatMap(({ path }) => {
+      const heads = this.undated.get(path)!.heads
+      return (this.tasks.get(path) ?? []).filter((t) => heads.includes(t.line))
+    })
+  }
+
+  /** Every event on the ladder. */
+  events(): ListedTask[] {
+    return [...this.eventsOf.values()].flat()
   }
 
   /** The tags and categories already used in the vault, each once. */
@@ -94,6 +125,7 @@ export class TaskIndex extends Events {
   private read(file: TFile, data: string) {
     this.files.delete(file.path)
     this.undated.delete(file.path)
+    this.eventsOf.delete(file.path)
     const lines = data.split('\n')
     this.words.set(file.path, vocabulary(lines))
     const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter ?? null
@@ -106,8 +138,10 @@ export class TaskIndex extends Events {
       )
     else this.tasks.delete(file.path)
     if (!home) return
-    const count = home.kind === 'list' ? 0 : openUndated(lines).length
-    if (count) this.undated.set(file.path, { home, count })
+    const heads = home.kind === 'list' ? [] : openUndated(lines)
+    if (heads.length) this.undated.set(file.path, { home, heads })
+    const events = eventsIn(lines).map(({ line, block }) => ({ path: file.path, line, head: lines[line], block, home }))
+    if (events.length) this.eventsOf.set(file.path, events)
     const tasks = found.flatMap(({ line, block }) =>
       indexedDates(block, home).map((d) => ({ ...d, path: file.path, line, head: lines[line], block, home })),
     )
@@ -252,21 +286,112 @@ export class TaskListView extends ItemView {
   }
 }
 
+export const AGENDA_VIEW = 'tide-agenda'
+
+/** Like the org agenda: the overdue in red, the pending, then today and the next 6 days; live with the index. */
+export class AgendaView extends ItemView {
+  constructor(
+    leaf: WorkspaceLeaf,
+    private index: TaskIndex,
+    private today: () => string,
+    /** opens the daily, week, month or year, created when missing */
+    private open: (place: Place) => void,
+    /** Move to… on a task or event */
+    private move: (task: TaskAt) => void,
+  ) {
+    super(leaf)
+  }
+
+  getViewType() {
+    return AGENDA_VIEW
+  }
+
+  getDisplayText() {
+    return t('agenda.title')
+  }
+
+  getIcon() {
+    return 'calendar-clock'
+  }
+
+  async onOpen() {
+    this.registerEvent(this.index.on('changed', () => this.render()))
+    this.render()
+  }
+
+  private render() {
+    this.contentEl.empty()
+    const today = this.today()
+    const { overdue, pending, days } = agenda(
+      [...this.index.all(), ...this.index.events()],
+      this.index.pendingTasks(today),
+      today,
+    )
+    if (overdue.length) {
+      const ul = this.section('agenda.overdue', 'tide-agenda-overdue')
+      for (const entry of overdue) this.row(ul, entry).createSpan({ cls: 'tide-date', text: entry.date })
+    }
+    if (pending.length) {
+      const ul = this.section('agenda.pending', 'tide-agenda-pending')
+      for (const task of pending) this.row(ul, { task })
+    }
+    for (const [i, { date, entries }] of days.entries()) {
+      const heading = this.contentEl.createDiv({ cls: 'tide-agenda-day' })
+      this.link(heading, `${date} ${weekday(date)}`, { kind: 'day', key: date })
+      if (date === today) heading.createSpan({ cls: 'tide-agenda-today', text: t('agenda.today') })
+      // the week and month of the first day, then each new one's
+      const prev = days[i - 1]?.date
+      const week = isoWeek(date).week
+      if (!prev || week !== isoWeek(prev).week) this.link(heading, week, { kind: 'week', key: week })
+      const month = date.slice(0, 7)
+      if (!prev || month !== prev.slice(0, 7)) this.link(heading, month, { kind: 'month', key: month })
+      const ul = this.contentEl.createEl('ul', { cls: 'tide-tasks' })
+      for (const entry of entries) this.row(ul, entry)
+    }
+  }
+
+  private section(title: MessageKey, cls: string): HTMLElement {
+    this.contentEl.createDiv({ cls: `tide-agenda-section ${cls}`, text: t(title) })
+    return this.contentEl.createEl('ul', { cls: 'tide-tasks' })
+  }
+
+  private link(el: HTMLElement, text: string, place: Place) {
+    el.createEl('a', { text, href: '#' }).addEventListener('click', (e) => {
+      e.preventDefault()
+      this.open(place)
+    })
+  }
+
+  /** The time, then the row as in the list, the deadline mark, the source and Move to…. */
+  private row(ul: HTMLElement, { task, kind, time }: Pick<AgendaEntry, 'task'> & Partial<AgendaEntry>): HTMLElement {
+    const li = taskRow(ul, this.app, task)
+    if (time) li.prepend(createSpan({ cls: 'tide-time', text: time }))
+    if (kind === 'deadline') li.createSpan({ cls: 'tide-deadline', text: t('block.deadline') })
+    li.createSpan({ cls: 'tide-source', text: task.path.replace(/\.md$/, '') })
+    const move = li.createEl('button', { cls: 'clickable-icon tide-move', attr: { 'aria-label': t('command.moveTo') } })
+    setIcon(move, 'forward')
+    move.addEventListener('click', () => this.move(task))
+    return li
+  }
+}
+
 export function fileAt(app: App, path: string): TFile | null {
   const file = app.vault.getAbstractFileByPath(path)
   return file instanceof TFile ? file : null
 }
 
-/** The state, which advances on a click, the priority and the title, which opens the source. */
+/** The state, which advances on a click, the priority and the title, which opens the source. An event has no state. */
 function taskRow(ul: HTMLElement, app: App, task: ListedTask): HTMLElement {
   const { state, priority, title } = task.block
   const li = ul.createEl('li', { cls: 'tide-task' })
-  const button = li.createEl('button', {
-    cls: `tide-state tide-state-${state!.toLowerCase()}`,
-    text: state!,
-    attr: { 'aria-label': t('command.nextState') },
-  })
-  button.addEventListener('click', () => void advance(app, task))
+  if (state) {
+    const button = li.createEl('button', {
+      cls: `tide-state tide-state-${state.toLowerCase()}`,
+      text: state,
+      attr: { 'aria-label': t('command.nextState') },
+    })
+    button.addEventListener('click', () => void advance(app, task))
+  }
   if (priority) li.createSpan({ cls: 'tide-priority', text: `[#${priority}]` })
   const link = li.createEl('a', { cls: 'tide-title', text: title, href: '#' })
   // the same mark as in the editor, on every row of a task off the rule, not only the one shown off its place
@@ -282,7 +407,17 @@ function taskRow(ul: HTMLElement, app: App, task: ListedTask): HTMLElement {
   return li
 }
 
-type TaskAt = Pick<ListedTask, 'path' | 'line' | 'head'>
+export type TaskAt = Pick<ListedTask, 'path' | 'line' | 'head'>
+
+/**
+ * The head line of the task in `lines`, which may have changed since indexing: the same line, else the only line
+ * equal to the head, else -1 so nothing is written.
+ */
+export function headAt(lines: string[], task: TaskAt): number {
+  if (lines[task.line] === task.head) return task.line
+  const hits = lines.flatMap((l, i) => (l === task.head ? [i] : []))
+  return hits.length === 1 ? hits[0] : -1
+}
 
 async function openAt(app: App, task: TaskAt) {
   const file = fileAt(app, task.path)
@@ -295,9 +430,7 @@ async function advance(app: App, task: TaskAt) {
   if (!file) return
   await app.vault.process(file, (data) => {
     const lines = data.split('\n')
-    // the file may have changed since indexing: write only to a head we can still find for sure
-    const hits = lines.flatMap((l, i) => (l === task.head ? [i] : []))
-    const at = lines[task.line] === task.head ? task.line : hits.length === 1 ? hits[0] : -1
+    const at = headAt(lines, task)
     const changes = at < 0 ? null : orgAction(lines, at, 'nextState', new Date())
     return changes ? applyChanges(data, changes) : data
   })

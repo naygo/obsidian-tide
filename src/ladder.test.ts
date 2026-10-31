@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   type Place,
   type PlaceSettings,
+  eventsIn,
   indexedDates,
   isoWeek,
   offRule,
@@ -148,6 +149,25 @@ describe('tasksIn', () => {
     ])
     expect(tasks[0].block.scheduled?.date).toBe('2026-10-30')
     expect(tasks[0].block.steps).toHaveLength(1)
+  })
+})
+
+describe('eventsIn', () => {
+  it('finds the keywordless lines with SCHEDULED, not the notes nor the items inside a task', () => {
+    const lines = [
+      '- reunião',
+      '  SCHEDULED: <2026-10-30 sex 14:00>',
+      '- nota solta',
+      '- TODO a',
+      '  - almoço',
+      '    SCHEDULED: <2026-10-30 sex 12:00>',
+      '- aniversário',
+      '  SCHEDULED: <2026-11-02 seg>',
+    ]
+    expect(eventsIn(lines).map((e) => [e.line, e.block.title, e.block.scheduled?.time])).toEqual([
+      [0, 'reunião', '14:00'],
+      [6, 'aniversário', null],
+    ])
   })
 })
 

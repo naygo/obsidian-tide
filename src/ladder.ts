@@ -134,6 +134,16 @@ export function tasksIn(lines: string[]): FoundTask[] {
   })
 }
 
+/** Every event: a keywordless line with SCHEDULED, outside any task, whose block is its own. */
+export function eventsIn(lines: string[]): FoundTask[] {
+  return lines.flatMap((l, line) => {
+    const range = !parseHead(l)?.state && findBlock(lines, line)
+    if (!range || range.start !== line) return []
+    const block = parseBlock(lines.slice(line, range.end))!
+    return block.kind === 'event' ? [{ line, block }] : []
+  })
+}
+
 /** Whether the day, week, month or year is over by `today`. A list never is. */
 export function ended(place: Place, today: string): boolean {
   return place.kind !== 'list' && firstDay(place) < today && !holds(place, today)
