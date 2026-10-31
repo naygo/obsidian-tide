@@ -1,4 +1,5 @@
 import { keyOf } from './ladder'
+import { shiftDate } from './org'
 
 /** A habit: a note marked as one, its frontmatter read with the property names in en. */
 export interface Habit {
@@ -124,6 +125,16 @@ export function progress(h: Habit, date: string, amounts: Record<string, number>
   const { per } = h.goal
   const key = keyOf(per, date)
   return Object.entries(amounts).reduce((sum, [d, n]) => (keyOf(per, d) === key ? sum + n : sum), 0)
+}
+
+/** The goal's pace on `date`: done in its period, what is left to meet it, and the days left there, `date` included. */
+export function pace(h: Habit, date: string, amounts: Record<string, number>) {
+  if (!h.goal) return null
+  const done = progress(h, date, amounts)
+  const key = keyOf(h.goal.per, date)
+  let daysLeft = 0
+  for (let d = date; keyOf(h.goal.per, d) === key; d = shiftDate(d, '+1d')) daysLeft++
+  return { done, left: Math.max(0, h.goal.amount - done), daysLeft }
 }
 
 /** Whether any note already uses `name` as a property, ignoring case as Obsidian's properties do. */

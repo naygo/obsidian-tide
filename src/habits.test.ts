@@ -4,6 +4,7 @@ import {
   habitOf,
   isMarked,
   orphanKeys,
+  pace,
   plannedOn,
   progress,
   propertyUsed,
@@ -180,6 +181,35 @@ describe('progress', () => {
 
   it('is 0 without a goal', () => {
     expect(progress(habitOf('gym.md', null), '2026-10-31', { '2026-10-31': 1 })).toBe(0)
+  })
+})
+
+describe('pace', () => {
+  // 2026-10-31 is a Saturday: its ISO week ends on Sunday 2026-11-01
+  it('gives what is done, what is left of the goal and the days left in its period, today included', () => {
+    const gym = habitOf('gym.md', { goal: 3, goal_per: 'week' })
+    expect(pace(gym, '2026-10-31', { '2026-10-26': 1, '2026-10-31': 1, '2026-10-19': 1 })).toEqual({
+      done: 2,
+      left: 1,
+      daysLeft: 2,
+    })
+  })
+
+  it('counts the days left to the end of the day, the month or the year', () => {
+    const per = (goal_per: string) => pace(habitOf('l.md', { unit: 'p', goal: 10, goal_per }), '2026-10-31', {})
+    expect(per('day')?.daysLeft).toBe(1)
+    expect(per('month')?.daysLeft).toBe(1)
+    expect(per('year')?.daysLeft).toBe(62)
+    expect(pace(habitOf('l.md', { goal: 10, goal_per: 'month' }), '2026-02-01', {})?.daysLeft).toBe(28)
+  })
+
+  it('leaves nothing once the goal is met, however far past it', () => {
+    const água = habitOf('água.md', { unit: 'copos', goal: 8, goal_per: 'day' })
+    expect(pace(água, '2026-10-31', { '2026-10-31': 10 })).toEqual({ done: 10, left: 0, daysLeft: 1 })
+  })
+
+  it('is null for a habit without a goal', () => {
+    expect(pace(habitOf('gym.md', null), '2026-10-31', {})).toBeNull()
   })
 })
 

@@ -485,13 +485,18 @@ export default class TidePlugin extends Plugin {
       .sort((a, b) => a.name.localeCompare(b.name))
   }
 
-  /** The habits paused on `date` by the declarations of every context note. */
-  private paused(date: string): Set<string> {
-    const contexts = this.app.vault
+  /** The context notes with their declarations, by name. */
+  private contexts() {
+    return this.app.vault
       .getMarkdownFiles()
       .filter((f) => hasMarker(f.path, this.frontmatter(f), this.settings.contextMarker))
+      .map((f) => ({ name: f.basename, declarations: this.index.declarations(f.path) }))
+  }
+
+  /** The habits paused on `date` by the declarations of every context note. */
+  private paused(date: string): Set<string> {
     return pausedOn(
-      contexts.flatMap((f) => this.index.declarations(f.path)),
+      this.contexts().flatMap((c) => c.declarations),
       date,
     )
   }
@@ -758,6 +763,7 @@ export default class TidePlugin extends Plugin {
           () => this.dailyFrontmatters(),
           today,
           (date, edit) => void this.markHabit(date, edit),
+          () => this.contexts(),
           this.index,
         ),
     )

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { monthDays, monthWeeks, shiftMonth } from './calendar'
+import { monthDays, monthWeeks, shiftMonth, yearWeeks } from './calendar'
 
 describe('monthWeeks', () => {
   it('gives the ISO weeks of the month, Monday first, with the days of the months around it', () => {
@@ -54,5 +54,23 @@ describe('monthDays', () => {
   it('ends February on the 28th, or the 29th in a leap year', () => {
     expect(monthDays('2026-02').pop()).toBe('2026-02-28')
     expect(monthDays('2028-02').pop()).toBe('2028-02-29')
+  })
+})
+
+describe('yearWeeks', () => {
+  it('gives the days of the year in columns from Monday, null outside the year', () => {
+    const weeks = yearWeeks('2026')
+    expect(weeks).toHaveLength(53)
+    expect(weeks[0]).toEqual([null, null, null, '2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04'])
+    expect(weeks[52]).toEqual(['2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', null, null, null])
+    expect(weeks.flat().filter(Boolean)).toHaveLength(365)
+  })
+
+  it('takes a 54th column for a leap year that starts on a Sunday', () => {
+    const weeks = yearWeeks('2012')
+    expect(weeks).toHaveLength(54)
+    expect(weeks[0][6]).toBe('2012-01-01')
+    expect(weeks[53][0]).toBe('2012-12-31')
+    expect(weeks.flat().filter(Boolean)).toHaveLength(366)
   })
 })

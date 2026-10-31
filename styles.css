@@ -363,6 +363,53 @@ body.tide-theme-catppuccin.theme-light {
   min-width: 2.5em;
 }
 
+/* a day a context pauses: striped, still clickable, ahead too */
+.tide-board td.tide-board-paused {
+  background: repeating-linear-gradient(-45deg, transparent 0 4px, var(--background-modifier-border) 4px 6px);
+}
+
+.tide-board-contexts {
+  color: var(--text-muted);
+}
+
+.tide-year-name {
+  display: flex;
+  gap: var(--size-4-2);
+  align-items: center;
+  margin-top: var(--size-4-2);
+}
+
+/* the year of a habit: a column per week from Monday, a square per day filled where marked, in the habit's color */
+.tide-year {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 10px);
+  grid-auto-columns: 10px;
+  gap: 2px;
+  color: var(--interactive-accent);
+}
+
+.tide-year-day {
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+}
+
+.tide-year-day.tide-year-marked {
+  background: currentColor;
+}
+
+.tide-year-day.tide-year-paused:not(.tide-year-marked) {
+  background: repeating-linear-gradient(-45deg, transparent 0 2px, var(--background-modifier-border) 2px 4px);
+}
+
+.tide-year-day.tide-year-ahead {
+  opacity: 0.4;
+}
+
+.tide-year-day.tide-year-out {
+  visibility: hidden;
+}
+
 /* the tide-habits block: a checkbox or a number per habit planned on the day, in the habit's color; others folded */
 .tide-habits {
   list-style: none;
