@@ -295,8 +295,8 @@ export class AgendaView extends ItemView {
     leaf: WorkspaceLeaf,
     private index: TaskIndex,
     private today: () => string,
-    /** opens the daily, week, month or year, created when missing */
-    private open: (place: Place) => void,
+    /** opens the daily, week, month or year, created when missing; not `open`, which would shadow View.open and skip onOpen */
+    private openPlace: (place: Place) => void,
     /** Move to… on a task or event */
     private move: (task: TaskAt) => void,
   ) {
@@ -338,14 +338,14 @@ export class AgendaView extends ItemView {
     }
     for (const [i, { date, entries }] of days.entries()) {
       const heading = this.contentEl.createDiv({ cls: 'tide-agenda-day' })
-      placeLink(this.open, heading, `${date} ${weekday(date)}`, { kind: 'day', key: date })
+      placeLink(this.openPlace, heading, `${date} ${weekday(date)}`, { kind: 'day', key: date })
       if (date === today) heading.createSpan({ cls: 'tide-agenda-today', text: t('agenda.today') })
       // the week and month of the first day, then each new one's
       const prev = days[i - 1]?.date
       const week = isoWeek(date).week
-      if (!prev || week !== isoWeek(prev).week) placeLink(this.open, heading, week, { kind: 'week', key: week })
+      if (!prev || week !== isoWeek(prev).week) placeLink(this.openPlace, heading, week, { kind: 'week', key: week })
       const month = date.slice(0, 7)
-      if (!prev || month !== prev.slice(0, 7)) placeLink(this.open, heading, month, { kind: 'month', key: month })
+      if (!prev || month !== prev.slice(0, 7)) placeLink(this.openPlace, heading, month, { kind: 'month', key: month })
       const ul = this.contentEl.createEl('ul', { cls: 'tide-tasks' })
       for (const entry of entries) this.row(ul, entry)
     }
@@ -457,7 +457,7 @@ export class CalendarView extends ItemView {
     private index: TaskIndex,
     private today: () => string,
     /** opens the daily, week or month, created when missing */
-    private open: (place: Place) => void,
+    private openPlace: (place: Place) => void,
   ) {
     super(leaf)
     this.month = today().slice(0, 7)
@@ -491,7 +491,7 @@ export class CalendarView extends ItemView {
     const today = this.today()
     const nav = this.contentEl.createDiv({ cls: 'tide-calendar-nav' })
     this.button(nav, 'chevron-left', 'calendar.prev', () => this.go(shiftMonth(this.month, -1)))
-    placeLink(this.open, nav, this.month, { kind: 'month', key: this.month })
+    placeLink(this.openPlace, nav, this.month, { kind: 'month', key: this.month })
     this.button(nav, 'chevron-right', 'calendar.next', () => this.go(shiftMonth(this.month, 1)))
     nav.createEl('button', { text: t('calendar.today') }).addEventListener('click', () => this.go(today.slice(0, 7)))
 
@@ -500,9 +500,9 @@ export class CalendarView extends ItemView {
     grid.createDiv()
     for (const day of weeks[0].days) grid.createDiv({ cls: 'tide-calendar-weekday', text: weekday(day) })
     for (const { week, days } of weeks) {
-      placeLink(this.open, grid, week.slice(6), { kind: 'week', key: week }).addClass('tide-calendar-week')
+      placeLink(this.openPlace, grid, week.slice(6), { kind: 'week', key: week }).addClass('tide-calendar-week')
       for (const day of days) {
-        const a = placeLink(this.open, grid, String(Number(day.slice(8))), { kind: 'day', key: day })
+        const a = placeLink(this.openPlace, grid, String(Number(day.slice(8))), { kind: 'day', key: day })
         if (!day.startsWith(this.month)) a.addClass('tide-calendar-other')
         if (day === today) a.addClass('tide-calendar-today')
       }
